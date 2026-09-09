@@ -1,0 +1,14 @@
+{
+  "provider":"xai",
+  "model_family":"grok",
+  "exact_model_id":"grok-family",
+  "aliases":["grok"],
+  "match_prefixes":["grok-"],
+  "source_urls":[],
+  "source_review_date":"2026-09-09",
+  "source_type":"no-official-profile",
+  "confidence":"low",
+  "profile_revision":"1",
+  "prompt_recommendations":[],
+  "runtime_recommendations":[]
+}

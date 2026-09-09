@@ -1,0 +1,14 @@
+{
+  "provider":"deepseek",
+  "model_family":"deepseek",
+  "exact_model_id":"deepseek-family",
+  "aliases":["deepseek"],
+  "match_prefixes":["deepseek-"],
+  "source_urls":[],
+  "source_review_date":"2026-09-09",
+  "source_type":"no-official-profile",
+  "confidence":"low",
+  "profile_revision":"1",
+  "prompt_recommendations":[],
+  "runtime_recommendations":[]
+}

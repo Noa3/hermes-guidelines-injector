@@ -1,0 +1,18 @@
+{
+  "providers": {
+    "openai": {
+      "priority": "official",
+      "adapter": "openai",
+      "sources": {
+        "model_guidance": {
+          "url": "https://developers.openai.com/api/docs/guides/latest-model",
+          "type": "official"
+        },
+        "models": {
+          "url": "https://developers.openai.com/api/docs/models",
+          "type": "official"
+        }
+      }
+    }
+  }
+}

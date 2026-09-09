@@ -1,0 +1,21 @@
+{
+  "provider": "openai",
+  "model_family": "gpt-5",
+  "exact_model_id": "gpt-5",
+  "aliases": ["gpt-5", "gpt-5-chat-latest"],
+  "match_prefixes": ["gpt-5-"],
+  "source_urls": ["https://developers.openai.com/api/docs/guides/latest-model"],
+  "source_review_date": "2026-09-09",
+  "source_hash": "2a59b26078e001a4e4e3da10693e80ad5ee1c02cbe472afa6b682308f27b8b22",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {"id":"openai.gpt-5.outcome","text":"Specify the desired outcome, constraints, and acceptance criteria; avoid adding procedural scaffolding unless it is genuinely needed.","scopes":["common","coding","research","writing"],"priority":80,"source_section":"Prompting"},
+    {"id":"openai.gpt-5.verbosity","text":"Match response detail to the task and explicitly request concise or thorough output where that distinction matters.","scopes":["common","writing","coding"],"priority":55,"source_section":"Verbosity"}
+  ],
+  "runtime_recommendations": [
+    {"id":"openai.gpt-5.reasoning-effort","text":"Reasoning effort is a provider runtime parameter; select it in API configuration when exposed rather than converting it into a generic prompt command.","classification":"RUNTIME_APPLICABLE","scopes":["common"],"priority":80,"source_section":"Model parameters"},
+    {"id":"openai.gpt-5.verbosity-parameter","text":"The provider verbosity parameter belongs to runtime configuration and is not applied through this plugin's prompt hook.","classification":"RUNTIME_APPLICABLE","scopes":["common","writing"],"priority":50,"source_section":"Verbosity"}
+  ]
+}

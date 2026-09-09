@@ -1,0 +1,14 @@
+{
+  "provider":"glm",
+  "model_family":"glm",
+  "exact_model_id":"glm-family",
+  "aliases":["glm","zhipu"],
+  "match_prefixes":["glm-"],
+  "source_urls":[],
+  "source_review_date":"2026-09-09",
+  "source_type":"no-official-profile",
+  "confidence":"low",
+  "profile_revision":"1",
+  "prompt_recommendations":[],
+  "runtime_recommendations":[]
+}

@@ -1,0 +1,23 @@
+{
+  "provider": "openai",
+  "model_family": "gpt-5.2",
+  "exact_model_id": "gpt-5.2",
+  "aliases": ["gpt-5.2"],
+  "match_prefixes": ["gpt-5.2-"],
+  "source_urls": ["https://developers.openai.com/api/docs/guides/latest-model"],
+  "source_review_date": "2026-09-09",
+  "source_hash": "2a59b26078e001a4e4e3da10693e80ad5ee1c02cbe472afa6b682308f27b8b22",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {"id":"openai.gpt-5.2.reasoning-none","text":"When reasoning effort is configured as `none`, make the task, constraints, and expected result explicit; use an outline request only when the task actually benefits from visible planning.","scopes":["common","coding","research"],"priority":80,"source_section":"Lower reasoning effort"},
+    {"id":"openai.gpt-5.2.verbosity","text":"Choose response detail based on the task: concise output for focused generation, higher detail for explanations and substantial refactoring.","scopes":["common","writing","coding"],"priority":65,"source_section":"Verbosity"},
+    {"id":"openai.gpt-5.2.tools","text":"Use provider-supported structured tools for tool-heavy tasks and keep tool descriptions precise; do not duplicate full tool documentation in the prompt.","scopes":["tool-heavy","coding"],"priority":65,"source_section":"Using tools"}
+  ],
+  "runtime_recommendations": [
+    {"id":"openai.gpt-5.2.reasoning-effort","text":"GPT-5.2 exposes `none`, `low`, `medium`, `high`, and `xhigh` reasoning settings; select them in API configuration, not by pretending a prompt rule changes the request.","classification":"RUNTIME_APPLICABLE","scopes":["common"],"priority":90,"source_section":"New features"},
+    {"id":"openai.gpt-5.2.compaction","text":"The official guide documents compaction for long contexts; current Hermes plugin hooks do not enable provider compaction.","classification":"UNSUPPORTED_BY_CURRENT_HERMES","scopes":["long-running-agent"],"priority":75,"source_section":"Context management"},
+    {"id":"openai.gpt-5.2.verbosity-parameter","text":"The `text.verbosity` API parameter is runtime configuration and remains separate from prompt guidance.","classification":"RUNTIME_APPLICABLE","scopes":["common","writing","coding"],"priority":55,"source_section":"Verbosity"}
+  ]
+}

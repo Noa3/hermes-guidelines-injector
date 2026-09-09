@@ -1,0 +1,14 @@
+{
+  "provider":"meta",
+  "model_family":"llama",
+  "exact_model_id":"llama-family",
+  "aliases":["llama"],
+  "match_prefixes":["llama-","meta-llama/"],
+  "source_urls":[],
+  "source_review_date":"2026-09-09",
+  "source_type":"no-official-profile",
+  "confidence":"low",
+  "profile_revision":"1",
+  "prompt_recommendations":[],
+  "runtime_recommendations":[]
+}

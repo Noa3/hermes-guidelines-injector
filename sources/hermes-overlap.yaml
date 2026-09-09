@@ -1,0 +1,18 @@
+{
+  "reviewed_date": "2026-09-09",
+  "source": "https://github.com/NousResearch/hermes-agent/blob/main/agent/prompt_builder.py",
+  "source_system_prompt": "https://github.com/NousResearch/hermes-agent/blob/main/agent/system_prompt.py",
+  "rules": {
+    "task-completion": "Hermes TASK_COMPLETION_GUIDANCE",
+    "parallel-tool-calls": "Hermes PARALLEL_TOOL_CALL_GUIDANCE",
+    "tool-use-enforcement": "Hermes TOOL_USE_ENFORCEMENT_GUIDANCE",
+    "execution-discipline": "Hermes OPENAI_MODEL_EXECUTION_GUIDANCE",
+    "mandatory-tool-use": "Hermes mandatory_tool_use section",
+    "act-dont-ask": "Hermes act_dont_ask section",
+    "prerequisite-checks": "Hermes prerequisite_checks section",
+    "verification": "Hermes verification section",
+    "external-state-verification": "Hermes external_state_verification section",
+    "literal-preservation": "Hermes literal_preservation section",
+    "missing-context": "Hermes missing_context section"
+  }
+}

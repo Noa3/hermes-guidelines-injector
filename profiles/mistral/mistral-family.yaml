@@ -1,0 +1,14 @@
+{
+  "provider":"mistral",
+  "model_family":"mistral",
+  "exact_model_id":"mistral-family",
+  "aliases":["mistral"],
+  "match_prefixes":["mistral-","mixtral-"],
+  "source_urls":[],
+  "source_review_date":"2026-09-09",
+  "source_type":"no-official-profile",
+  "confidence":"low",
+  "profile_revision":"1",
+  "prompt_recommendations":[],
+  "runtime_recommendations":[]
+}

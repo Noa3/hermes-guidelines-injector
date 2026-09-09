@@ -1,0 +1,18 @@
+name: model-guidance
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: Compile official provider model guidance into compact Hermes runtime context.
+author: Noa3
+license: MIT
+homepage: https://github.com/Noa3/hermes-guidelines-injector
+tags: [model-guidance, openai, prompts, provider-compatibility]
+provides_hooks:
+  - pre_llm_call
+  - pre_api_request
+  - on_session_start
+config_schema:
+  enabled: {type: bool, default: true, description: Enable model-specific guidance injection}
+  max_chars: {type: int, default: 3600, description: Maximum injected guidance characters}
+  source_timeout_seconds: {type: float, default: 8.0, description: Timeout used only by the manual update command}
+  source_max_bytes: {type: int, default: 2000000, description: Maximum bytes accepted per official source}

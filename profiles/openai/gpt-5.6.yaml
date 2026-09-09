@@ -1,0 +1,23 @@
+{
+  "provider": "openai",
+  "model_family": "gpt-5.6",
+  "exact_model_id": "gpt-5.6",
+  "aliases": ["gpt-5.6", "gpt-5.6-chat-latest"],
+  "match_prefixes": ["gpt-5.6-"],
+  "source_urls": ["https://developers.openai.com/api/docs/guides/latest-model"],
+  "source_review_date": "2026-09-09",
+  "source_hash": "2a59b26078e001a4e4e3da10693e80ad5ee1c02cbe472afa6b682308f27b8b22",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {"id":"openai.gpt-5.6.outcome-oriented","text":"State the desired outcome, constraints, and acceptance criteria explicitly; avoid prescribing a rigid hidden chain of thought or unnecessary procedure.","scopes":["common","coding","research","writing"],"priority":90,"source_section":"Prompting"},
+    {"id":"openai.gpt-5.6.tool-selection","text":"Expose only relevant tools and give each tool a precise purpose; select the narrowest tool that can complete the next operation.","scopes":["tool-heavy","coding","computer-use"],"priority":75,"source_section":"Tool use"},
+    {"id":"openai.gpt-5.6.concise-progress","text":"Keep progress updates short and decision-relevant during long tasks; report the next meaningful milestone rather than narrating every internal step.","scopes":["long-running-agent","coding","tool-heavy"],"priority":60,"source_section":"Agent interaction"}
+  ],
+  "runtime_recommendations": [
+    {"id":"openai.gpt-5.6.reasoning-effort","text":"Official runtime recommendation: use the provider's reasoning-effort parameter when supported; the plugin does not mutate it through `pre_api_request`.","classification":"RUNTIME_APPLICABLE","scopes":["common"],"priority":80,"source_section":"API parameters"},
+    {"id":"openai.gpt-5.6.compaction","text":"Official runtime recommendation: use server-side compaction for long trajectories when the selected Hermes API supports it.","classification":"UNSUPPORTED_BY_CURRENT_HERMES","scopes":["long-running-agent"],"priority":70,"source_section":"Context management"},
+    {"id":"openai.gpt-5.6.verbosity","text":"The provider exposes a verbosity parameter; choose it in API configuration rather than translating it into a prompt instruction.","classification":"RUNTIME_APPLICABLE","scopes":["common","writing","coding"],"priority":50,"source_section":"Verbosity"}
+  ]
+}

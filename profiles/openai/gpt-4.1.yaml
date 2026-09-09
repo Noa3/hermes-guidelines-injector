@@ -1,0 +1,23 @@
+{
+  "provider": "openai",
+  "model_family": "gpt-4.1",
+  "exact_model_id": "gpt-4.1",
+  "aliases": ["gpt-4.1"],
+  "match_prefixes": ["gpt-4.1-"],
+  "source_urls": ["https://developers.openai.com/api/docs/guides/latest-model"],
+  "source_review_date": "2026-09-09",
+  "source_hash": "2a59b26078e001a4e4e3da10693e80ad5ee1c02cbe472afa6b682308f27b8b22",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {"id":"openai.gpt-4.1.literal-instructions","text":"Make important instructions concrete and explicit; this model follows system and user instructions closely and literally.","scopes":["common","coding","writing"],"priority":85,"source_section":"Agentic workflows"},
+    {"id":"openai.gpt-4.1.tool-use","text":"If repository or task state is uncertain, use the available tools to inspect it instead of guessing; rely on structured tool schemas rather than duplicating tool definitions in prompt text.","scopes":["coding","repository-work","tool-heavy"],"priority":80,"source_section":"System prompt reminders"},
+    {"id":"openai.gpt-4.1.plan-optional","text":"For complex coding work, provide a concise plan before tool execution when visible planning improves coordination; do not require it for trivial operations.","scopes":["coding","repository-work","long-running-agent"],"priority":55,"source_section":"Prompting-induced planning"}
+  ],
+  "runtime_recommendations": [
+    {"id":"openai.gpt-4.1.no-reasoning","text":"GPT-4.1 is non-reasoning; reasoning-specific parameters are not applicable to this model.","classification":"INFORMATIONAL","scopes":["common"],"priority":80,"source_section":"Model parameters"},
+    {"id":"openai.gpt-4.1.tools-field","text":"Pass tool schemas through the API tools field; this plugin cannot retrofit malformed provider requests from a prompt hook.","classification":"RUNTIME_APPLICABLE","scopes":["tool-heavy","coding"],"priority":75,"source_section":"Tool calls"},
+    {"id":"openai.gpt-4.1.reasoning-params","text":"Do not send reasoning-only request parameters to GPT-4.1; request compatibility belongs to the provider integration.","classification":"INFORMATIONAL","scopes":["common"],"priority":55,"source_section":"Model parameters"}
+  ]
+}
