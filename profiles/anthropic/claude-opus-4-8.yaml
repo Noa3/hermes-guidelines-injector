@@ -1,0 +1,28 @@
+{
+  "provider": "anthropic",
+  "model_family": "claude-opus-4.8",
+  "exact_model_id": "claude-opus-4-8",
+  "aliases": [
+    "claude-opus-4-8"
+  ],
+  "match_prefixes": [
+    "claude-opus-4-8-"
+  ],
+  "inherits": [
+    "anthropic/claude-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-templates-and-variables",
+    "https://docs.anthropic.com/en/docs/about-claude/model-deprecations"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

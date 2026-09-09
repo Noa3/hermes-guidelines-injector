@@ -1,0 +1,44 @@
+{
+  "provider": "xai",
+  "model_family": "grok-4.6",
+  "exact_model_id": "grok-4.6",
+  "aliases": [
+    "grok-4.6"
+  ],
+  "match_prefixes": [
+    "grok-4.6-"
+  ],
+  "inherits": [
+    "xai/grok-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.x.ai/developers/grok-4-6",
+    "https://docs.x.ai/developers/advanced-api-usage/prompt-caching"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [
+    {
+      "id": "xai.grok-4.6.reasoning-effort",
+      "text": "Grok 4.6 supports low, medium, high, and xhigh reasoning effort; choose this in runtime configuration according to task complexity.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "RUNTIME_APPLICABLE",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Grok 4.6",
+      "confidence": "high",
+      "source_marker": "Reasoning"
+    }
+  ],
+  "negative_overrides": [],
+  "metadata": {}
+}

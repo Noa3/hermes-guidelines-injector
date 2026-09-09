@@ -1,14 +1,78 @@
 {
-  "provider":"google",
-  "model_family":"gemini",
-  "exact_model_id":"gemini-family",
-  "aliases":["gemini"],
-  "match_prefixes":["gemini-"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "google",
+  "model_family": "gemini",
+  "exact_model_id": "gemini-family",
+  "aliases": [
+    "gemini"
+  ],
+  "match_prefixes": [
+    "gemini-"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://ai.google.dev/gemini-api/docs/prompting-strategies"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "google.gemini.precise-direct",
+      "text": "Interpret the task from precise, direct instructions and prioritize explicitly stated goals, constraints, and output requirements.",
+      "scopes": [
+        "common",
+        "coding",
+        "research",
+        "writing"
+      ],
+      "priority": 90,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Core prompting principles",
+      "confidence": "high",
+      "source_marker": "Be precise and direct"
+    },
+    {
+      "id": "google.gemini.consistent-structure",
+      "text": "Use consistent delimiters and section labels to distinguish instructions, context, and requested output.",
+      "scopes": [
+        "common",
+        "coding",
+        "research"
+      ],
+      "priority": 70,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Core prompting principles",
+      "confidence": "high",
+      "source_marker": "Use consistent structure"
+    },
+    {
+      "id": "google.gemini.long-context-anchor",
+      "text": "For long supplied context, ground the answer in that context and treat the final task or question as the operation to perform on it.",
+      "scopes": [
+        "research",
+        "coding",
+        "long-running-agent"
+      ],
+      "priority": 80,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Core prompting principles",
+      "confidence": "high",
+      "source_marker": "Structure for long contexts"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
 }

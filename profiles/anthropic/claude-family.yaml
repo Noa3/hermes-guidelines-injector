@@ -1,14 +1,110 @@
 {
-  "provider":"anthropic",
-  "model_family":"claude",
-  "exact_model_id":"claude-family",
-  "aliases":["claude"],
-  "match_prefixes":["claude-"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "anthropic",
+  "model_family": "claude",
+  "exact_model_id": "claude-family",
+  "aliases": [
+    "claude"
+  ],
+  "match_prefixes": [
+    "claude-"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-templates-and-variables"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "anthropic.claude.clear-direct",
+      "text": "Follow the user's explicit task, constraints, and requested output closely; do not invent extra scope that was not requested.",
+      "scopes": [
+        "common",
+        "coding",
+        "research",
+        "writing"
+      ],
+      "priority": 90,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "General principles",
+      "confidence": "high",
+      "source_marker": "Be clear and direct"
+    },
+    {
+      "id": "anthropic.claude.structured-context",
+      "text": "Treat clearly delimited sections such as instructions, context, examples, and input data as distinct and use them according to their labels.",
+      "scopes": [
+        "common",
+        "research",
+        "coding"
+      ],
+      "priority": 75,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "General principles",
+      "confidence": "high",
+      "source_marker": "Structure prompts with XML tags"
+    },
+    {
+      "id": "anthropic.claude.examples",
+      "text": "When examples are provided, infer the intended format or behavior from the relevant examples without overfitting to incidental details.",
+      "scopes": [
+        "common",
+        "writing",
+        "coding"
+      ],
+      "priority": 60,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "General principles",
+      "confidence": "high",
+      "source_marker": "Use examples effectively"
+    },
+    {
+      "id": "anthropic.claude.coding-general-solution",
+      "text": "For coding tasks, implement the underlying general solution rather than hard-coding around tests or creating workaround scripts that only satisfy examples.",
+      "scopes": [
+        "coding",
+        "repository-work"
+      ],
+      "priority": 85,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Agentic systems",
+      "confidence": "high",
+      "source_marker": "Avoid focusing on passing tests and hardcoding"
+    },
+    {
+      "id": "anthropic.claude.minimal-engineering",
+      "text": "Avoid unnecessary abstractions, files, refactors, or configurability beyond what the requested change actually needs.",
+      "scopes": [
+        "coding",
+        "repository-work"
+      ],
+      "priority": 70,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Agentic systems",
+      "confidence": "high",
+      "source_marker": "Overeagerness"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
 }

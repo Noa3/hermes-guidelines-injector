@@ -1,0 +1,28 @@
+{
+  "provider": "glm",
+  "model_family": "glm-5",
+  "exact_model_id": "glm-5",
+  "aliases": [
+    "glm-5"
+  ],
+  "match_prefixes": [
+    "glm-5-"
+  ],
+  "inherits": [
+    "glm/glm-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.z.ai/devpack/resources/best-practice",
+    "https://docs.z.ai/api-reference/llm/chat-completion"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official-provider-best-practice",
+  "profile_revision": "1",
+  "confidence": "medium",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

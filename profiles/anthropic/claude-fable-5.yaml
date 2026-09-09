@@ -1,0 +1,44 @@
+{
+  "provider": "anthropic",
+  "model_family": "claude-fable-5",
+  "exact_model_id": "claude-fable-5",
+  "aliases": [
+    "claude-fable-5"
+  ],
+  "match_prefixes": [
+    "claude-fable-5-"
+  ],
+  "inherits": [
+    "anthropic/claude-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-templates-and-variables",
+    "https://docs.anthropic.com/en/docs/about-claude/model-deprecations"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [
+    {
+      "id": "anthropic.claude-fable-5.thinking",
+      "text": "Thinking is always enabled for this model family; treat thinking configuration as a runtime capability rather than prompt text.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "RUNTIME_APPLICABLE",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Thinking and reasoning",
+      "confidence": "high",
+      "source_marker": "thinking is always on"
+    }
+  ],
+  "negative_overrides": [],
+  "metadata": {}
+}

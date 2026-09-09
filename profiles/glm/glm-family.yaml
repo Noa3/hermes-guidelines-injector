@@ -1,14 +1,80 @@
 {
-  "provider":"glm",
-  "model_family":"glm",
-  "exact_model_id":"glm-family",
-  "aliases":["glm","zhipu"],
-  "match_prefixes":["glm-"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "glm",
+  "model_family": "glm",
+  "exact_model_id": "glm-family",
+  "aliases": [
+    "glm",
+    "zhipu",
+    "zai"
+  ],
+  "match_prefixes": [
+    "glm-",
+    "chatglm-"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.z.ai/devpack/resources/best-practice"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official-provider-best-practice",
+  "profile_revision": "1",
+  "confidence": "medium",
+  "prompt_recommendations": [
+    {
+      "id": "glm.coding-task-contract",
+      "text": "For repository work, anchor execution to the goal, relevant context, engineering constraints, and explicit done criteria.",
+      "scopes": [
+        "coding",
+        "repository-work",
+        "long-running-agent"
+      ],
+      "priority": 85,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Coding Agents",
+      "confidence": "medium",
+      "source_marker": "Structure Task Inputs"
+    },
+    {
+      "id": "glm.plan-complex-change",
+      "text": "For complex engineering changes, establish a workable plan before editing, then update the plan when observed results invalidate assumptions.",
+      "scopes": [
+        "coding",
+        "repository-work",
+        "long-running-agent"
+      ],
+      "priority": 70,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Coding Agents",
+      "confidence": "medium",
+      "source_marker": "plan before making changes"
+    },
+    {
+      "id": "glm.project-guidance",
+      "text": "Use project-level guidance, available tools, and repository context as part of the working constraints rather than treating the task as an isolated code-generation request.",
+      "scopes": [
+        "coding",
+        "repository-work",
+        "tool-heavy"
+      ],
+      "priority": 75,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Coding Agents",
+      "confidence": "medium",
+      "source_marker": "project-level guidance"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
 }

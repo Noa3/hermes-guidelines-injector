@@ -1,0 +1,63 @@
+{
+  "provider": "google",
+  "model_family": "gemini-3",
+  "exact_model_id": "gemini-3-family",
+  "aliases": [
+    "gemini-3"
+  ],
+  "match_prefixes": [
+    "gemini-3-"
+  ],
+  "inherits": [
+    "google/gemini-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://ai.google.dev/gemini-api/docs/prompting-strategies"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "google.gemini-3.avoid-overprompting",
+      "text": "Prefer direct execution over over-analyzing elaborate prompt scaffolding; use only the structure and reasoning depth the task actually requires.",
+      "scopes": [
+        "common",
+        "coding",
+        "research",
+        "long-running-agent"
+      ],
+      "priority": 75,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Gemini 3",
+      "confidence": "high",
+      "source_marker": "Gemini 3"
+    },
+    {
+      "id": "google.gemini-3.verbosity",
+      "text": "Default to a direct, efficient response unless the user explicitly requests a more detailed or conversational answer.",
+      "scopes": [
+        "common",
+        "writing",
+        "research"
+      ],
+      "priority": 55,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Core prompting principles",
+      "confidence": "high",
+      "source_marker": "Control output verbosity"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

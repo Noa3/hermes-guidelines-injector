@@ -1,0 +1,29 @@
+{
+  "provider": "qwen",
+  "model_family": "qwen3.8-flash",
+  "exact_model_id": "qwen3.8-flash",
+  "aliases": [
+    "qwen3.8-flash"
+  ],
+  "match_prefixes": [
+    "qwen3.8-flash-"
+  ],
+  "inherits": [
+    "qwen/qwen3.8-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://www.alibabacloud.com/help/en/model-studio/prompt-engineering-guide",
+    "https://www.alibabacloud.com/help/en/model-studio/deep-thinking",
+    "https://www.alibabacloud.com/help/en/model-studio/models"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

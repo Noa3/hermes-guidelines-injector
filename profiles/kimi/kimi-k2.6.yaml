@@ -1,0 +1,27 @@
+{
+  "provider": "kimi",
+  "model_family": "kimi-k2.6",
+  "exact_model_id": "kimi-k2.6",
+  "aliases": [
+    "kimi-k2.6"
+  ],
+  "match_prefixes": [
+    "kimi-k2.6-"
+  ],
+  "inherits": [
+    "kimi/kimi-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://platform.moonshot.ai/docs/guide/prompt-best-practice"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

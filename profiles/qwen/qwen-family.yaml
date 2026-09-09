@@ -1,14 +1,78 @@
 {
-  "provider":"qwen",
-  "model_family":"qwen",
-  "exact_model_id":"qwen-family",
-  "aliases":["qwen"],
-  "match_prefixes":["qwen"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "qwen",
+  "model_family": "qwen",
+  "exact_model_id": "qwen-family",
+  "aliases": [
+    "qwen"
+  ],
+  "match_prefixes": [
+    "qwen",
+    "qwq"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://www.alibabacloud.com/help/en/model-studio/prompt-engineering-guide"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "qwen.clear-specific",
+      "text": "Use the explicitly supplied goal, context, constraints, and requested result as the basis for the response; avoid filling important gaps with guesses.",
+      "scopes": [
+        "common",
+        "coding",
+        "research",
+        "writing"
+      ],
+      "priority": 90,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Design prompts",
+      "confidence": "high",
+      "source_marker": "Build clear and specific prompts"
+    },
+    {
+      "id": "qwen.reference-grounding",
+      "text": "When reference material is supplied, ground relevant claims and decisions in that material and state when the provided information is insufficient.",
+      "scopes": [
+        "research",
+        "coding"
+      ],
+      "priority": 80,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Prompt engineering",
+      "confidence": "high",
+      "source_marker": "Prompt engineering"
+    },
+    {
+      "id": "qwen.output-requirements",
+      "text": "Follow requested output structure, length, and formatting constraints precisely when they are specified.",
+      "scopes": [
+        "common",
+        "writing",
+        "coding"
+      ],
+      "priority": 70,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Design prompts",
+      "confidence": "high",
+      "source_marker": "clear and specific"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
 }

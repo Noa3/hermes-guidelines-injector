@@ -38,6 +38,7 @@ def test_normalization_and_router_provider_resolution(repository):
     assert result.profile.exact_model_id == "gpt-5.6"
     assert result.match_kind == "exact"
     assert repository.resolve("openai:gpt-5.6").profile.exact_model_id == "gpt-5.6"
+    assert repository.resolve("gpt-5.6", "openrouter").profile.exact_model_id == "gpt-5.6"
 
 
 @pytest.mark.parametrize(
@@ -47,8 +48,8 @@ def test_normalization_and_router_provider_resolution(repository):
         ("gpt-5.1", "openai", "gpt-5.1"),
         ("openai/codex", "openai", "gpt-5.3-codex"),
         ("anthropic/claude-opus-4-1", "anthropic", "claude"),
-        ("google/gemini-2.5-pro", "google", "gemini"),
-        ("qwen/qwen3", "qwen", "qwen"),
+        ("google/gemini-2.5-pro", "google", "gemini-2.5"),
+        ("qwen/qwen3", "qwen", "qwen3"),
         ("deepseek/deepseek-chat", "deepseek", "deepseek"),
         ("kimi/kimi-k2", "kimi", "kimi"),
         ("glm/glm-4.5", "glm", "glm"),
@@ -79,7 +80,7 @@ def test_model_switch_does_not_use_stale_compilation(repository):
     assert "gpt-5.6" in first.injected_text
     assert "gpt-5.6" not in second.injected_text
     assert second.match.profile.exact_model_id == "claude-family"
-    assert second.injected_text == ""
+    assert "claude-opus-4-1" in second.injected_text
 
 
 def test_overlap_filter_suppresses_hermes_rules(repository):
@@ -162,3 +163,44 @@ def test_user_override_wins_and_corrupt_override_is_ignored(tmp_path):
     result = compile_guidance(repo, repo.resolve("gpt-5.6"), user_message="Give a concise answer")
     assert "local repository's documented acceptance checks" in result.injected_text
     assert any("corrupt user override" in error for error in repo.errors)
+
+
+@pytest.mark.parametrize(
+    ("model_id", "profile_id", "match_kind", "derivative_type"),
+    [
+        ("qwen3.8-flash", "qwen3.8-flash", "exact", ""),
+        ("qwen3.8-flash-0902", "qwen3.8-flash", "pattern", ""),
+        ("qwen3.8-flash-obliterated", "qwen3.8-flash", "derivative", "alignment"),
+        ("Qwen/Qwen3.8-27B", "qwen3.8-27b", "exact", ""),
+        ("bartowski/Qwen3.8-27B-GGUF", "qwen3.8-27b", "derivative", "packaging"),
+        ("unsloth/Qwen3.8-27B-bnb-4bit", "qwen3.8-27b", "derivative", "packaging"),
+        ("qwen3.8:27b", "qwen3.8-27b", "derivative", "packaging"),
+        ("claude-opus-5-custom", "claude-opus-5", "derivative", "community"),
+        ("gemini-3.5-flash-local", "gemini-3.5-flash", "derivative", "community"),
+        ("deepseek-v4-pro-abliterated", "deepseek-v4-pro", "derivative", "alignment"),
+        ("glm-5.1-fp8", "glm-5.1", "derivative", "packaging"),
+        ("mistral-medium-3-5-awq", "mistral-medium-3-5", "derivative", "packaging"),
+        ("grok-4.6-local", "grok-4.6", "derivative", "community"),
+    ],
+)
+def test_conservative_derivative_resolution(repository, model_id, profile_id, match_kind, derivative_type):
+    result = repository.resolve(model_id)
+    assert result.profile is not None
+    assert result.profile.exact_model_id == profile_id
+    assert result.upstream_model == profile_id
+    assert result.match_kind == match_kind
+    assert result.derivative_type == derivative_type
+    if match_kind == "derivative":
+        assert result.confidence == "medium"
+
+
+def test_derivative_resolution_does_not_guess_unknown_community_basename(repository):
+    result = repository.resolve("bartowski/Unrelated-Model-GGUF")
+    assert result.profile is None
+    assert result.match_kind == "fallback"
+
+
+def test_longest_specific_profile_wins_for_derivatives(repository):
+    result = repository.resolve("qwen3.8-flash-obliterated")
+    assert result.profile is not None
+    assert result.profile.exact_model_id == "qwen3.8-flash"

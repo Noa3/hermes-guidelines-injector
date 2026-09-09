@@ -1,14 +1,96 @@
 {
-  "provider":"kimi",
-  "model_family":"kimi",
-  "exact_model_id":"kimi-family",
-  "aliases":["kimi"],
-  "match_prefixes":["kimi-","moonshot-"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "kimi",
+  "model_family": "kimi",
+  "exact_model_id": "kimi-family",
+  "aliases": [
+    "kimi",
+    "moonshot"
+  ],
+  "match_prefixes": [
+    "kimi-",
+    "moonshot-"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://platform.moonshot.ai/docs/guide/prompt-best-practice"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "kimi.clear-instructions",
+      "text": "Follow clear task instructions and use all important details the user provided instead of guessing missing intent.",
+      "scopes": [
+        "common",
+        "coding",
+        "research",
+        "writing"
+      ],
+      "priority": 90,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Prompts",
+      "confidence": "high",
+      "source_marker": "Write Clear Instructions"
+    },
+    {
+      "id": "kimi.delimiters",
+      "text": "Respect delimiters and section boundaries that distinguish instructions, reference text, examples, and data.",
+      "scopes": [
+        "common",
+        "research",
+        "coding"
+      ],
+      "priority": 70,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Prompts",
+      "confidence": "high",
+      "source_marker": "Using Delimiters"
+    },
+    {
+      "id": "kimi.reference-text",
+      "text": "When the task is grounded in supplied reference text, answer from that reference and say when the needed information is not present.",
+      "scopes": [
+        "research",
+        "coding"
+      ],
+      "priority": 80,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Prompts",
+      "confidence": "high",
+      "source_marker": "Provide Reference Text"
+    },
+    {
+      "id": "kimi.complex-tasks",
+      "text": "For complex tasks, decompose the work into concrete stages and carry them through in order when doing so improves reliability.",
+      "scopes": [
+        "coding",
+        "long-running-agent",
+        "tool-heavy"
+      ],
+      "priority": 65,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Best Practices for Prompts",
+      "confidence": "high",
+      "source_marker": "Break Down Complex Tasks"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
 }

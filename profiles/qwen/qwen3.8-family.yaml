@@ -1,0 +1,45 @@
+{
+  "provider": "qwen",
+  "model_family": "qwen3.8",
+  "exact_model_id": "qwen3.8-family",
+  "aliases": [
+    "qwen3.8"
+  ],
+  "match_prefixes": [
+    "qwen3.8-"
+  ],
+  "inherits": [
+    "qwen/qwen-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://www.alibabacloud.com/help/en/model-studio/prompt-engineering-guide",
+    "https://www.alibabacloud.com/help/en/model-studio/deep-thinking",
+    "https://www.alibabacloud.com/help/en/model-studio/models"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [
+    {
+      "id": "qwen.qwen3.8.thinking-default",
+      "text": "Qwen3.8 hybrid-thinking models have thinking enabled by default where supported; use the serving API's thinking control for cost/latency tradeoffs.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "RUNTIME_APPLICABLE",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Supported models",
+      "confidence": "high",
+      "source_marker": "Qwen3.8"
+    }
+  ],
+  "negative_overrides": [],
+  "metadata": {}
+}

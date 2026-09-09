@@ -1,0 +1,53 @@
+{
+  "packaging": [
+    "gguf",
+    "awq",
+    "gptq",
+    "exl2",
+    "mlx",
+    "fp8",
+    "int8",
+    "int4",
+    "4bit",
+    "8bit",
+    "bnb",
+    "quant",
+    "quantized",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q8"
+  ],
+  "alignment": [
+    "abliterated",
+    "obliterated",
+    "uncensored",
+    "dpo",
+    "sft",
+    "lora",
+    "merged",
+    "finetune",
+    "fine-tuned",
+    "roleplay"
+  ],
+  "community": [
+    "custom",
+    "local",
+    "community",
+    "hf",
+    "huggingface",
+    "ollama"
+  ],
+  "snapshot_patterns": [
+    "^[0-9]{4}$",
+    "^[0-9]{8}$",
+    "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+    "^v[0-9]+(?:[.-][0-9]+)*$"
+  ],
+  "ignored_tags": [
+    "latest",
+    "default"
+  ]
+}

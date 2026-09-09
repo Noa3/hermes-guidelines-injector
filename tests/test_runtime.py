@@ -17,6 +17,17 @@ class FakeContext:
         return self.values.get(key, default)
 
 
+def _call(runtime, *, session_id, turn_id, model, user_message):
+    return runtime.pre_llm_call(
+        session_id=session_id,
+        turn_id=turn_id,
+        model=model,
+        user_message=user_message,
+        conversation_history=[],
+        platform="cli",
+    )
+
+
 def test_runtime_pre_llm_call_injects_compact_context_and_exposes_commands(tmp_path):
     runtime = ModelGuidanceRuntime(
         FakeContext(),
@@ -29,7 +40,7 @@ def test_runtime_pre_llm_call_injects_compact_context_and_exposes_commands(tmp_p
         conversation_history=[],
         platform="cli",
     )
-    assert response and "<model_guidance>" in response["context"]
+    assert response and "<model_guidance" in response["context"]
     assert "gpt-5.6" in response["context"]
     assert len(response["context"]) <= 3600
 
@@ -44,8 +55,9 @@ def test_runtime_model_switch_uses_hook_model_each_turn(tmp_path):
     first = runtime.pre_llm_call(model="openai/gpt-5.6", user_message="Write code")
     second = runtime.pre_llm_call(model="google/gemini-2.5-pro", user_message="Write code")
     assert "gpt-5.6" in first["context"]
-    assert second is None  # family fallback has no prompt injection
-    assert runtime.last_result.match.profile.exact_model_id == "gemini-family"
+    assert second and "<model_guidance" in second["context"]
+    assert runtime.last_result.match.profile is not None
+    assert runtime.last_result.match.profile.provider == "google"
 
 
 def test_normal_runtime_is_network_free_and_uses_deterministic_cache(tmp_path, monkeypatch):
@@ -165,3 +177,112 @@ def test_diagnostics_include_profile_source_anchor_state(tmp_path):
     assert "total:" in status
     assert "PROFILE SOURCE ANCHORS" in sources
     assert "openai/gpt-5.6:" in sources
+
+
+def test_activation_mode_injects_base_once_and_deduplicates_task_guidance(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    first = _call(
+        runtime,
+        session_id="session-a",
+        turn_id="turn-1",
+        model="qwen/qwen3.8",
+        user_message="Implement the repository change",
+    )
+    second = _call(
+        runtime,
+        session_id="session-a",
+        turn_id="turn-2",
+        model="qwen/qwen3.8",
+        user_message="Implement another repository change",
+    )
+    assert first and "<model_guidance" in first["context"]
+    assert first and "<model_task_guidance" in first["context"]
+    assert second is None
+
+
+def test_activation_mode_emits_only_new_task_guidance_after_scope_change(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    first = _call(
+        runtime,
+        session_id="session-a",
+        turn_id="turn-1",
+        model="qwen/qwen3.8",
+        user_message="Implement the repository change",
+    )
+    changed = _call(
+        runtime,
+        session_id="session-a",
+        turn_id="turn-2",
+        model="qwen/qwen3.8",
+        user_message="Research current sources and compare the findings",
+    )
+    assert first and "<model_guidance" in first["context"]
+    assert changed and "<model_guidance" not in changed["context"]
+    assert changed and "<model_task_guidance" in changed["context"]
+    assert "supersedes" in changed["context"].lower()
+
+
+def test_activation_mode_reinjects_on_model_switch_and_switch_back(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    qwen = _call(runtime, session_id="session-a", turn_id="1", model="qwen/qwen3.8", user_message="Implement code")
+    claude = _call(runtime, session_id="session-a", turn_id="2", model="anthropic/claude-opus-5", user_message="Implement code")
+    qwen_again = _call(runtime, session_id="session-a", turn_id="3", model="qwen/qwen3.8", user_message="Implement code")
+    assert qwen and "model_guidance" in qwen["context"]
+    assert claude and "model_guidance" in claude["context"] and "supersedes" in claude["context"].lower()
+    assert qwen_again and "model_guidance" in qwen_again["context"] and "qwen3.8" in qwen_again["context"]
+
+
+def test_activation_state_is_isolated_between_sessions(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    first_a = _call(runtime, session_id="session-a", turn_id="a1", model="qwen/qwen3.8", user_message="Implement code")
+    first_b = _call(runtime, session_id="session-b", turn_id="b1", model="qwen/qwen3.8", user_message="Implement code")
+    second_a = _call(runtime, session_id="session-a", turn_id="a2", model="qwen/qwen3.8", user_message="Implement code")
+    assert first_a and first_b
+    assert second_a is None
+
+
+def test_same_turn_is_idempotent(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    first = _call(runtime, session_id="session-a", turn_id="same-turn", model="qwen/qwen3.8", user_message="Implement code")
+    duplicate = _call(runtime, session_id="session-a", turn_id="same-turn", model="qwen/qwen3.8", user_message="Implement code")
+    assert first
+    assert duplicate is None
+
+
+def test_profile_revision_reinjects_base_guidance(tmp_path):
+    data_root = tmp_path / "data"
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=data_root)
+    first = _call(runtime, session_id="session-a", turn_id="1", model="openai/gpt-5.6", user_message="Implement code")
+    assert first and "model_guidance" in first["context"]
+    override_dir = data_root / "user-overrides" / "openai"
+    override_dir.mkdir(parents=True)
+    override = json.loads((ROOT / "profiles/openai/gpt-5.6.yaml").read_text(encoding="utf-8"))
+    override["profile_revision"] = "2"
+    (override_dir / "gpt-5.6.yaml").write_text(json.dumps(override), encoding="utf-8")
+    changed = _call(runtime, session_id="session-a", turn_id="2", model="openai/gpt-5.6", user_message="Implement code")
+    assert changed and "model_guidance" in changed["context"]
+
+
+def test_every_turn_compatibility_mode_is_opt_in(tmp_path):
+    runtime = ModelGuidanceRuntime(
+        FakeContext({"injection_mode": "every_turn"}),
+        plugin_root=ROOT,
+        data_root=tmp_path / "data",
+    )
+    first = _call(runtime, session_id="session-a", turn_id="1", model="qwen/qwen3.8", user_message="Implement code")
+    second = _call(runtime, session_id="session-a", turn_id="2", model="qwen/qwen3.8", user_message="Implement code")
+    assert first and second
+    assert "<model_guidance" in second["context"]
+
+
+def test_legacy_total_budget_drops_optional_task_layer_first(tmp_path):
+    runtime = ModelGuidanceRuntime(
+        FakeContext({"max_chars": 200, "max_base_guidance_chars": 1800, "max_task_guidance_chars": 700}),
+        plugin_root=ROOT,
+        data_root=tmp_path / "data",
+    )
+    result = _call(runtime, session_id="budget", turn_id="1", model="qwen/qwen3.8", user_message="Implement code")
+    assert result
+    assert len(result["context"]) <= 200
+    assert "<model_guidance" in result["context"]
+    assert "<model_task_guidance" not in result["context"]

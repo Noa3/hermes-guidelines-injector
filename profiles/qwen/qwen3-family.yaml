@@ -1,0 +1,44 @@
+{
+  "provider": "qwen",
+  "model_family": "qwen3",
+  "exact_model_id": "qwen3-family",
+  "aliases": [
+    "qwen3"
+  ],
+  "match_prefixes": [
+    "qwen3-"
+  ],
+  "inherits": [
+    "qwen/qwen-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://www.alibabacloud.com/help/en/model-studio/prompt-engineering-guide",
+    "https://www.alibabacloud.com/help/en/model-studio/deep-thinking"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [
+    {
+      "id": "qwen.qwen3.thinking",
+      "text": "Thinking support depends on the specific Qwen3 model and serving stack; configure it at the runtime/API layer rather than by generic prompt text.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "RUNTIME_APPLICABLE",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Deep thinking",
+      "confidence": "high",
+      "source_marker": "enable_thinking"
+    }
+  ],
+  "negative_overrides": [],
+  "metadata": {}
+}

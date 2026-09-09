@@ -1,0 +1,28 @@
+{
+  "provider": "qwen",
+  "model_family": "qwen3-coder",
+  "exact_model_id": "qwen3-coder-family",
+  "aliases": [
+    "qwen3-coder"
+  ],
+  "match_prefixes": [
+    "qwen3-coder-"
+  ],
+  "inherits": [
+    "qwen/qwen3-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://www.alibabacloud.com/help/en/model-studio/prompt-engineering-guide",
+    "https://qwenlm.github.io/blog/qwen3-coder/"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

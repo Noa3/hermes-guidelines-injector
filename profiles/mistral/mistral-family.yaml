@@ -1,14 +1,81 @@
 {
-  "provider":"mistral",
-  "model_family":"mistral",
-  "exact_model_id":"mistral-family",
-  "aliases":["mistral"],
-  "match_prefixes":["mistral-","mixtral-"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "mistral",
+  "model_family": "mistral",
+  "exact_model_id": "mistral-family",
+  "aliases": [
+    "mistral"
+  ],
+  "match_prefixes": [
+    "mistral-",
+    "mixtral-",
+    "devstral-",
+    "magistral-"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.mistral.ai/inference/prompting"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "mistral.purpose",
+      "text": "Use the stated role, purpose, and task as the main behavioral frame for the response.",
+      "scopes": [
+        "common",
+        "writing",
+        "coding"
+      ],
+      "priority": 75,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Prompting",
+      "confidence": "high",
+      "source_marker": "Providing a Purpose"
+    },
+    {
+      "id": "mistral.structure",
+      "text": "Follow clearly structured and complete instructions, preserving the hierarchy between task, constraints, context, and output format.",
+      "scopes": [
+        "common",
+        "coding",
+        "research",
+        "writing"
+      ],
+      "priority": 90,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Prompting",
+      "confidence": "high",
+      "source_marker": "Structure"
+    },
+    {
+      "id": "mistral.examples",
+      "text": "When examples are supplied, use them to infer the expected output pattern and formatting while still solving the actual input.",
+      "scopes": [
+        "common",
+        "writing",
+        "coding"
+      ],
+      "priority": 60,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Prompting",
+      "confidence": "high",
+      "source_marker": "Few-Shot Prompting"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
 }

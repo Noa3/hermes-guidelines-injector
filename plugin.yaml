@@ -1,5 +1,5 @@
 name: model-guidance
-version: 0.1.1
+version: 0.2.0
 manifest_version: 2
 api_version: 1
 description: Compile official provider model guidance into compact Hermes runtime context.
@@ -13,7 +13,10 @@ provides_hooks:
   - on_session_start
 config_schema:
   enabled: {type: bool, default: true, description: Enable model-specific guidance injection}
+  injection_mode: {type: string, default: activation, description: Inject base guidance on activation or every turn for compatibility}
   max_chars: {type: int, default: 3600, description: Maximum injected guidance characters}
+  max_base_guidance_chars: {type: int, default: 1800, description: Maximum base model guidance characters per activation}
+  max_task_guidance_chars: {type: int, default: 700, description: Maximum task guidance characters per scope transition}
   max_rules: {type: int, default: 32, description: Maximum prompt rules selected per turn}
   max_family_rules: {type: int, default: 16, description: Maximum non-common family rules per turn}
   max_task_rules: {type: int, default: 8, description: Maximum task-scoped rules per turn}

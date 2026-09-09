@@ -1,0 +1,20 @@
+{
+  "created": "2026-09-09",
+  "purpose": "Drop-in non-OpenAI profile pack for Noa3/hermes-guidelines-injector",
+  "profile_count": 41,
+  "providers": [
+    "anthropic",
+    "deepseek",
+    "glm",
+    "google",
+    "kimi",
+    "mistral",
+    "qwen",
+    "xai"
+  ],
+  "important": [
+    "These files do not modify Hermes core or runtime.py.",
+    "Current /model-guidance update only has an OpenAI source updater; non-OpenAI source_marker values are provenance hints until provider adapters are implemented.",
+    "Community fine-tunes/quantized derivatives should use the upstream profile only as best-effort guidance; altered weights can change instruction/tool behavior."
+  ]
+}

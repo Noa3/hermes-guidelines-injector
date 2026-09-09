@@ -1,7 +1,10 @@
 """Hermes runtime integration for model-guidance."""
 from __future__ import annotations
 
-from dataclasses import asdict
+from collections import OrderedDict
+from dataclasses import dataclass
+import hashlib
+import html
 import logging
 import os
 from pathlib import Path
@@ -38,13 +41,35 @@ except ImportError:  # local unit tests may import modules from the repository r
 LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
+class ActivationState:
+    """Bounded session-local state for one model activation epoch."""
+
+    model_key: str = ""
+    activation_generation: int = 0
+    last_turn_id: str = ""
+    last_base_fingerprint: str = ""
+    last_task_scope: tuple[str, ...] = ()
+    last_task_fingerprint: str = ""
+    base_injected: bool = False
+    task_injected: bool = False
+
+
 class ModelGuidanceRuntime:
     def __init__(self, ctx: Any, *, plugin_root: Path | None = None, data_root: Path | None = None):
         self.ctx = ctx
         self.plugin_root = Path(plugin_root or Path(__file__).resolve().parent)
         self.data_root = Path(data_root or self._default_data_root())
         self.enabled = self._as_bool(self._config("enabled", True), True)
+        mode = str(self._config("injection_mode", "activation")).strip().lower()
+        self.injection_mode = mode if mode in {"activation", "every_turn"} else "activation"
         self.max_chars = self._bounded_int(self._config("max_chars", 3600), 200, 12000, 3600)
+        self.max_base_guidance_chars = self._bounded_int(
+            self._config("max_base_guidance_chars", 1800), 200, 6000, 1800
+        )
+        self.max_task_guidance_chars = self._bounded_int(
+            self._config("max_task_guidance_chars", 700), 100, 3000, 700
+        )
         self.max_rules = self._bounded_int(self._config("max_rules", 32), 0, 128, 32)
         self.max_family_rules = self._bounded_int(self._config("max_family_rules", 16), 0, 64, 16)
         self.max_task_rules = self._bounded_int(self._config("max_task_rules", 8), 0, 32, 8)
@@ -60,6 +85,10 @@ class ModelGuidanceRuntime:
         self.last_model_id = ""
         self.last_runtime_observation: dict[str, Any] = {}
         self.last_error = ""
+        self.last_session_id = ""
+        self.last_activation_state: ActivationState | None = None
+        self._activation_states: OrderedDict[str, ActivationState] = OrderedDict()
+        self._activation_state_limit = 256
         self._compile_cache: dict[tuple[Any, ...], CompilationResult] = {}
         self._compile_cache_limit = 128
         self.cache_hits = 0
@@ -133,9 +162,15 @@ class ModelGuidanceRuntime:
             return None
 
     def _runtime_config_signature(self) -> tuple[Any, ...]:
+        mode = str(self._config("injection_mode", "activation")).strip().lower()
+        if mode not in {"activation", "every_turn"}:
+            mode = "activation"
         return (
             self._as_bool(self._config("enabled", True), True),
+            mode,
             self._bounded_int(self._config("max_chars", 3600), 200, 12000, 3600),
+            self._bounded_int(self._config("max_base_guidance_chars", 1800), 200, 6000, 1800),
+            self._bounded_int(self._config("max_task_guidance_chars", 700), 100, 3000, 700),
             self._bounded_int(self._config("max_rules", 32), 0, 128, 32),
             self._bounded_int(self._config("max_family_rules", 16), 0, 64, 16),
             self._bounded_int(self._config("max_task_rules", 8), 0, 32, 8),
@@ -157,7 +192,16 @@ class ModelGuidanceRuntime:
             self._clear_cache()
         config_signature = self._runtime_config_signature()
         if config_signature != self._config_signature:
-            self.enabled, self.max_chars, self.max_rules, self.max_family_rules, self.max_task_rules = config_signature
+            (
+                self.enabled,
+                self.injection_mode,
+                self.max_chars,
+                self.max_base_guidance_chars,
+                self.max_task_guidance_chars,
+                self.max_rules,
+                self.max_family_rules,
+                self.max_task_rules,
+            ) = config_signature
             self._config_signature = config_signature
             self._clear_cache()
 
@@ -194,6 +238,8 @@ class ModelGuidanceRuntime:
             self.repository.generation,
             self._overlap_signature,
             self.max_chars,
+            self.max_base_guidance_chars,
+            self.max_task_guidance_chars,
             self.max_rules,
             self.max_family_rules,
             self.max_task_rules,
@@ -213,6 +259,8 @@ class ModelGuidanceRuntime:
             conversation_history=history,
             platform=platform,
             max_chars=self.max_chars,
+            max_base_chars=self.max_base_guidance_chars,
+            max_task_chars=self.max_task_guidance_chars,
             max_rules=self.max_rules,
             max_family_rules=self.max_family_rules,
             max_task_rules=self.max_task_rules,
@@ -224,9 +272,159 @@ class ModelGuidanceRuntime:
         self._compile_cache[key] = result
         return result
 
+    def _session_key(self, kwargs: Mapping[str, Any]) -> str:
+        """Prefer Hermes' conversation identity; use task identity for isolated workers."""
+        session_id = str(kwargs.get("session_id") or "").strip()
+        if session_id:
+            return f"session:{session_id}"
+        task_id = str(kwargs.get("task_id") or "").strip()
+        return f"task:{task_id}" if task_id else ""
+
+    def _activation_state_for(self, key: str) -> ActivationState:
+        state = self._activation_states.pop(key, None)
+        if state is None:
+            state = ActivationState()
+        self._activation_states[key] = state
+        while len(self._activation_states) > self._activation_state_limit:
+            self._activation_states.popitem(last=False)
+        return state
+
+    def _guidance_fingerprint(self, result: CompilationResult, *, base: bool) -> str:
+        profile = result.match.profile
+        parts = [
+            COMPILER_VERSION,
+            str(self.repository.generation),
+            result.match.provider,
+            result.match.upstream_model,
+            result.match.profile.exact_model_id if profile else "",
+            profile.profile_revision if profile else "",
+            result.match.match_kind,
+            result.match.derivative_type,
+        ]
+        rules = result.base_prompt if base else result.task_prompt
+        parts.extend(f"{item.id}\x00{item.text}" for item in rules)
+        return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _xml_attr(value: str) -> str:
+        return html.escape(str(value), quote=True)
+
+    def _fit_context(self, pieces: list[str]) -> str:
+        """Honor the legacy total limit while preserving complete XML wrappers."""
+        context = "\n\n".join(piece for piece in pieces if piece)
+        if len(context) <= self.max_chars:
+            return context
+        base = next((piece for piece in pieces if piece.startswith("<model_guidance ")), "")
+        if base and len(base) <= self.max_chars:
+            return base
+        candidate = base or next((piece for piece in pieces if piece), "")
+        if not candidate:
+            return ""
+        lines = candidate.splitlines()
+        if len(lines) < 2:
+            return candidate[: self.max_chars]
+        opening, closing = lines[0], lines[-1]
+        kept = [opening]
+        size = len(opening) + len(closing)
+        for line in lines[1:-1]:
+            if size + len(line) + 1 > self.max_chars:
+                break
+            kept.append(line)
+            size += len(line) + 1
+        kept.append(closing)
+        return "\n".join(kept)
+
+    def _render_base_guidance(self, result: CompilationResult, generation: int) -> str:
+        if not result.base_text:
+            return ""
+        profile = result.match.profile
+        profile_id = f"{profile.provider}/{profile.exact_model_id}" if profile else "unknown"
+        model = result.match.normalized_model_id
+        revision = profile.profile_revision if profile else "unknown"
+        return (
+            f'<model_guidance model="{self._xml_attr(model)}" '
+            f'profile="{self._xml_attr(profile_id)}" revision="{self._xml_attr(revision)}" '
+            f'activation="{generation}">\n'
+            "Supersedes earlier model_guidance blocks.\n"
+            f"{result.base_text}\n"
+            "</model_guidance>"
+        )
+
+    def _render_task_guidance(self, result: CompilationResult, *, reset_only: bool = False) -> str:
+        scopes = ",".join(result.tasks)
+        body = "Supersedes earlier model_task_guidance blocks.\n"
+        if reset_only:
+            body += "No additional task-specific guidance applies to this scope."
+        else:
+            body += result.task_text
+        return (
+            f'<model_task_guidance scope="current-task" tasks="{self._xml_attr(scopes)}">\n'
+            f"{body}\n"
+            "</model_task_guidance>"
+        )
+
+    def _activation_context(
+        self,
+        result: CompilationResult,
+        *,
+        session_key: str,
+        turn_id: str,
+    ) -> str:
+        """Return only guidance that became active for this session and turn."""
+        state = self._activation_state_for(session_key) if session_key else ActivationState()
+        model_key = "|".join(
+            (
+                result.match.normalized_model_id,
+                result.match.provider,
+                result.match.profile.exact_model_id if result.match.profile else "",
+                result.match.match_kind,
+            )
+        )
+        base_fingerprint = self._guidance_fingerprint(result, base=True)
+        task_fingerprint = self._guidance_fingerprint(result, base=False)
+        if turn_id and state.last_turn_id == turn_id:
+            self.last_activation_state = state
+            return ""
+
+        model_changed = bool(state.model_key and state.model_key != model_key)
+        base_changed = bool(state.last_base_fingerprint and state.last_base_fingerprint != base_fingerprint)
+        first_activation = not state.model_key
+        base_needed = bool(result.base_text) and (first_activation or model_changed or base_changed)
+        scope_changed = bool(state.last_task_scope and state.last_task_scope != result.tasks)
+        task_needed = bool(result.task_text) and (
+            first_activation or model_changed or base_changed
+            or state.last_task_fingerprint != task_fingerprint
+            or scope_changed
+        )
+        reset_needed = scope_changed and not task_needed and not base_needed
+
+        if self.injection_mode == "every_turn":
+            base_needed = bool(result.base_text)
+            task_needed = bool(result.task_text)
+            reset_needed = False
+
+        pieces: list[str] = []
+        if base_needed:
+            state.activation_generation += 1
+            pieces.append(self._render_base_guidance(result, state.activation_generation))
+        if task_needed or reset_needed:
+            pieces.append(self._render_task_guidance(result, reset_only=reset_needed))
+
+        state.model_key = model_key
+        state.last_turn_id = turn_id
+        state.last_base_fingerprint = base_fingerprint
+        state.last_task_scope = result.tasks
+        state.last_task_fingerprint = task_fingerprint
+        state.base_injected = base_needed
+        state.task_injected = task_needed or reset_needed
+        self.last_activation_state = state
+        return self._fit_context(pieces)
+
     def on_session_start(self, **kwargs: Any) -> None:
-        # This is diagnostic-only.  pre_llm_call always uses its own model kwarg
-        # as authoritative, so a model switch cannot use stale state.
+        session_id = str(kwargs.get("session_id") or "").strip()
+        if session_id:
+            self._activation_states.pop(f"session:{session_id}", None)
+        # pre_llm_call always uses its own model kwarg as authoritative.
         model = kwargs.get("model")
         if isinstance(model, str):
             self.last_model_id = model
@@ -243,18 +441,28 @@ class ModelGuidanceRuntime:
         if not isinstance(model, str) or not model.strip():
             self.last_error = "Hermes did not supply a model ID for this turn"
             return None
+        user_message = kwargs.get("user_message", "")
+        if not isinstance(user_message, str) or not user_message.strip():
+            self.last_error = "No real user prompt was supplied for this turn"
+            return None
         try:
             self.last_model_id = model
             result = self._compile_cached(
                 model,
                 provider=str(kwargs.get("provider", "")),
-                user_message=str(kwargs.get("user_message", "")),
+                user_message=user_message,
                 conversation_history=kwargs.get("conversation_history") or [],
                 platform=str(kwargs.get("platform", "")),
             )
             self.last_result = result
             self.last_error = "; ".join(result.errors)
-            return {"context": result.injected_text} if result.injected_text else None
+            self.last_session_id = str(kwargs.get("session_id") or "")
+            context = self._activation_context(
+                result,
+                session_key=self._session_key(kwargs),
+                turn_id=str(kwargs.get("turn_id") or ""),
+            )
+            return {"context": context} if context else None
         except Exception as exc:  # fail open: never break Hermes' agent loop
             self.last_error = f"guidance disabled for this turn: {exc}"
             LOGGER.exception("model-guidance pre_llm_call failed")
@@ -344,6 +552,9 @@ class ModelGuidanceRuntime:
             f"Family: {result.match.model_family}",
             f"Profile: {result.match.profile.provider + '/' + result.match.profile.exact_model_id if result.match.profile else 'none'}",
             f"Match: {result.match.match_kind} ({result.match.confidence})",
+            f"Upstream: {result.match.upstream_model or 'none'}",
+            f"Derivative: {result.match.derivative_type or 'none'}",
+            f"Modifiers: {', '.join(result.match.modifiers) or 'none'}",
             f"Sources reviewed: {', '.join(result.match.profile.source_urls) if result.match.profile else 'none'}",
             f"Source anchors: verified: {anchor_counts[0]}, missing: {anchor_counts[1]}, total: {anchor_counts[2]}, unverified/no-marker: {anchor_counts[3]}",
             f"Prompt recommendations considered: {injected + len(result.hermes_handled)}",
@@ -354,10 +565,24 @@ class ModelGuidanceRuntime:
             f"Informational: {len(result.informational_recommendations)}",
             f"Unsupported by current Hermes: {len(result.unsupported_recommendations)}",
             f"Injected characters: {result.characters}",
+            f"Base layer characters: {len(result.base_text)}",
+            f"Task layer characters: {len(result.task_text)}",
             f"Estimated injected tokens: {estimate_tokens(result.injected_text)}",
             f"Cache: {'hit' if self.last_cache_hit else 'miss'} (hits={self.cache_hits}, misses={self.cache_misses})",
             f"Task scopes: {', '.join(result.tasks)}",
+            f"Injection mode: {self.injection_mode}",
         ]
+        if self.last_activation_state:
+            state = self.last_activation_state
+            lines.extend([
+                f"Activation model: {state.model_key or 'none'}",
+                f"Activation generation: {state.activation_generation}",
+                f"Base guidance fingerprint: {state.last_base_fingerprint or 'none'}",
+                f"Base guidance injected: {'yes' if state.base_injected else 'no'}",
+                f"Last task scope: {', '.join(state.last_task_scope) or 'none'}",
+                f"Last task guidance fingerprint: {state.last_task_fingerprint or 'none'}",
+                f"Task guidance injected: {'yes' if state.task_injected else 'no'}",
+            ])
         if self.last_error:
             lines.append(f"Diagnostics: {self.last_error}")
         return "\n".join(lines)
@@ -372,6 +597,7 @@ class ModelGuidanceRuntime:
             f"Resolver cache: hits={self.repository.resolve_cache_hits}, misses={self.repository.resolve_cache_misses}",
             f"Compiler cache: hits={self.cache_hits}, misses={self.cache_misses}, entries={len(self._compile_cache)}/{self._compile_cache_limit}",
             f"Compiler version: {COMPILER_VERSION}",
+            f"Activation state entries: {len(self._activation_states)}/{self._activation_state_limit}",
         ]
         if result is None:
             lines.append("Model: none supplied")
@@ -435,6 +661,10 @@ class ModelGuidanceRuntime:
             f"Family: {result.match.model_family}",
             f"Profile: {result.match.profile.provider + '/' + result.match.profile.exact_model_id if result.match.profile else 'none'}",
             f"Match kind: {result.match.match_kind}",
+            f"Confidence: {result.match.confidence}",
+            f"Upstream: {result.match.upstream_model or 'none'}",
+            f"Derivative: {result.match.derivative_type or 'none'}",
+            f"Modifiers: {', '.join(result.match.modifiers) or 'none'}",
             f"Inherited: {', '.join(result.inherited_profiles) or '(none)'}",
             f"Injected rules: {len(result.active_prompt)}",
             f"Hermes-suppressed rules: {len(result.hermes_handled)}",

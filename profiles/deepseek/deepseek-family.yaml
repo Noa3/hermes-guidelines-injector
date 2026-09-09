@@ -1,14 +1,56 @@
 {
-  "provider":"deepseek",
-  "model_family":"deepseek",
-  "exact_model_id":"deepseek-family",
-  "aliases":["deepseek"],
-  "match_prefixes":["deepseek-"],
-  "source_urls":[],
-  "source_review_date":"2026-09-09",
-  "source_type":"no-official-profile",
-  "confidence":"low",
-  "profile_revision":"1",
-  "prompt_recommendations":[],
-  "runtime_recommendations":[]
+  "provider": "deepseek",
+  "model_family": "deepseek",
+  "exact_model_id": "deepseek-family",
+  "aliases": [
+    "deepseek"
+  ],
+  "match_prefixes": [
+    "deepseek-"
+  ],
+  "inherits": [],
+  "remove_rules": [],
+  "source_urls": [
+    "https://api-docs.deepseek.com/guides/thinking_mode/"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [
+    {
+      "id": "deepseek.thinking-runtime",
+      "text": "Use the provider's thinking-mode and reasoning-effort controls for reasoning depth; do not emulate them with extra chain-of-thought prompting.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "RUNTIME_APPLICABLE",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Thinking Mode",
+      "confidence": "high",
+      "source_marker": "Thinking Mode"
+    },
+    {
+      "id": "deepseek.reasoning-replay",
+      "text": "When tool calls are used in thinking mode, preserve the provider-required reasoning content across subsequent requests.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "UNSUPPORTED_BY_CURRENT_HERMES",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Tool Calls",
+      "confidence": "high",
+      "source_marker": "reasoning_content"
+    }
+  ],
+  "negative_overrides": [],
+  "metadata": {}
 }

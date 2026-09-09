@@ -1,0 +1,31 @@
+{
+  "provider": "qwen",
+  "model_family": "qwen3.8-max",
+  "exact_model_id": "qwen3.8-max",
+  "aliases": [
+    "qwen3.8-max",
+    "qwen3.8-max-0902",
+    "qwen3.8-max-2026-09-02"
+  ],
+  "match_prefixes": [
+    "qwen3.8-max-"
+  ],
+  "inherits": [
+    "qwen/qwen3.8-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://www.alibabacloud.com/help/en/model-studio/prompt-engineering-guide",
+    "https://www.alibabacloud.com/help/en/model-studio/deep-thinking",
+    "https://www.alibabacloud.com/help/en/model-studio/qwen3-8-max"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

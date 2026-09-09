@@ -1,0 +1,63 @@
+{
+  "provider": "anthropic",
+  "model_family": "claude-opus-5",
+  "exact_model_id": "claude-opus-5",
+  "aliases": [
+    "claude-opus-5"
+  ],
+  "match_prefixes": [
+    "claude-opus-5-"
+  ],
+  "inherits": [
+    "anthropic/claude-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-templates-and-variables",
+    "https://docs.anthropic.com/en/docs/about-claude/model-deprecations"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [
+    {
+      "id": "anthropic.claude-opus-5.progress",
+      "text": "Keep user-facing progress updates factual and concise; report meaningful completed work or decisions instead of narrating routine internal activity.",
+      "scopes": [
+        "long-running-agent",
+        "coding",
+        "tool-heavy"
+      ],
+      "priority": 70,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Prompting Claude Opus 5",
+      "confidence": "high",
+      "source_marker": "user-facing progress updates"
+    },
+    {
+      "id": "anthropic.claude-opus-5.no-oververification",
+      "text": "Do not repeatedly re-verify already established results unless new changes, failures, or evidence make another verification useful.",
+      "scopes": [
+        "coding",
+        "repository-work",
+        "long-running-agent"
+      ],
+      "priority": 80,
+      "classification": "PROMPT_APPLICABLE",
+      "plugin_injection": true,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "Prompting Claude Opus 5",
+      "confidence": "high",
+      "source_marker": "task scope and over-verification"
+    }
+  ],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

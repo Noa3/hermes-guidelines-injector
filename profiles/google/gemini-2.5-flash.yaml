@@ -1,0 +1,27 @@
+{
+  "provider": "google",
+  "model_family": "gemini-2.5",
+  "exact_model_id": "gemini-2.5-flash",
+  "aliases": [
+    "gemini-2.5-flash"
+  ],
+  "match_prefixes": [
+    "gemini-2.5-flash-"
+  ],
+  "inherits": [
+    "google/gemini-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://ai.google.dev/gemini-api/docs/prompting-strategies"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

@@ -1,72 +1,63 @@
 # Hermes `model-guidance`
 
-`model-guidance` ist ein nativer Hermes-Agent-Plugin, das offizielle, modellbezogene
-Provider-Empfehlungen in kleine, lokale Runtime-Hinweise übersetzt. Es kopiert keine
-kompletten Provider-Dokumentationen in den Prompt.
+`model-guidance` is a native Hermes Agent plugin that compiles small, local model-compatibility hints into the existing Hermes `pre_llm_call` context channel.
 
-Der Runtime-Pfad ist:
+It does **not** copy provider documentation into prompts, call another model, modify Hermes core, or make network requests during normal turns.
+
+## What this plugin does
+
+For every LLM turn, Hermes supplies the active model ID to the plugin. The plugin then performs a deterministic local pipeline:
 
 ```text
-aktuelle Hermes-Modell-ID
-  -> Normalisierung
-  -> Provider/Familie/Exact-Profile
-  -> Inheritance und negative Overrides
-  -> Hermes-Overlap-Filter
-  -> konservative Task-Erkennung
-  -> Größenlimit
-  -> pre_llm_call-Kontext
+Hermes model ID
+  -> normalize the identifier
+  -> resolve provider and upstream model/profile
+  -> apply profile inheritance and user overrides
+  -> remove rules already covered by Hermes
+  -> classify the current task locally
+  -> compile bounded base/task guidance
+  -> inject only newly activated context through pre_llm_call
 ```
 
-Normale LLM-Turns benötigen **keinen Netzwerkzugriff und keinen zusätzlichen
-LLM-Aufruf**. Internet wird ausschließlich bei dem expliziten Befehl
-`/model-guidance update` verwendet.
+Normal runtime has:
 
-## Was enthalten ist
+- zero additional LLM calls;
+- zero network requests;
+- zero provider discovery requests;
+- zero embedding or AI-classification calls;
+- fail-open behavior if a profile or runtime path is broken.
 
-- native Hermes-Pluginstruktur mit `plugin.yaml` und `__init__.py`;
-- per-Turn-Modellauflösung über das tatsächliche `model`-Argument von `pre_llm_call`;
-- sichere Normalisierung von `provider/model`, `provider:model`, Plain IDs und
-  `openrouter/provider/model`;
-- exact, alias, prefix/family und sicherer Fallback-Matcher;
-- OpenAI-Profile für `gpt-6-astra`, `gpt-5.6`, `gpt-5.5`, `gpt-5.4`,
-  `gpt-5.3-codex`, `gpt-5.2`, `gpt-5.1`, `gpt-5` und `gpt-4.1`;
-- nicht-injizierende Familienprofile für Anthropic Claude, Gemini/Gemma, Qwen,
-  DeepSeek, Kimi/Moonshot, GLM/Zhipu, Meta/Llama, Mistral und xAI/Grok;
-- Trennung von Prompt-Regeln und API-/Runtime-Empfehlungen;
-- Hermes-Overlap-Registry mit Quellenhinweis auf die aktuelle Hermes-Implementierung;
-- getrennte Managed-Profile und lokale User-Overrides;
-- deterministischer Resolver-/Compiler-Cache mit Datei-, Config- und Versions-
-  Invalidierung;
-- konfigurierbare Rule-, Family- und Task-Limits sowie eine lokale Token-Schätzung;
-- deterministische Offline-Tests und simuliertes Model Switching;
-- fail-open Verhalten: ein kaputtes Profil darf Hermes nicht stoppen.
+Network access is restricted to the explicit `/model-guidance update` command.
 
-## Installation für Hermes
+## Installation
 
-### Variante A: in den aktuell verwendeten Hermes-Home installieren
+The current Hermes loader discovers user plugins below `$HERMES_HOME/plugins/` and only loads plugins listed in `plugins.enabled`.
 
-Der aktuelle Hermes-Loader scannt User-Plugins aus `$HERMES_HOME/plugins/` und lädt
-sie nur, wenn sie in `plugins.enabled` aktiviert sind. Kopiere den gesamten Ordner
-`model-guidance` dorthin:
+Copy the complete repository directory to:
 
 ```text
 $HERMES_HOME/plugins/model-guidance/
-├── plugin.yaml
-├── __init__.py
-├── runtime.py
-├── model_guidance_core.py
-├── model_guidance_sources.py
-├── profiles/
-└── sources/
 ```
 
-Unter Windows ist `$HERMES_HOME` profilabhängig, zum Beispiel:
+The directory must contain at least:
+
+```text
+plugin.yaml
+__init__.py
+runtime.py
+model_guidance_core.py
+model_guidance_sources.py
+profiles/
+sources/
+```
+
+On Windows, `$HERMES_HOME` is profile-specific, for example:
 
 ```text
 C:\Users\<user>\AppData\Local\hermes\profiles\code
 ```
 
-Danach in der Konfiguration aktivieren:
+Enable it in the profile configuration:
 
 ```yaml
 plugins:
@@ -74,221 +65,303 @@ plugins:
     - model-guidance
 ```
 
-Ein Profil behält seine eigene Konfiguration. Wenn mehrere Hermes-Profile oder Bots
-verwendet werden, muss das Plugin in jedes aktive `$HERMES_HOME/plugins/` kopiert und
-in jedem Profil aktiviert werden. Das Installationsskript dieses Repositories erledigt
-das für die vorhandenen Profile:
+The included installer can copy the plugin into the detected Hermes homes and profiles:
 
 ```bash
 python install_hermes.py
 ```
 
-Das Skript überschreibt keine vorhandenen User-Override-Dateien und verändert keine
-Secrets. Es legt nur eine Sicherung vorhandener Plugin-Dateien an, wenn am Ziel bereits
-eine ältere Installation dieses Plugins existiert.
+The installer does not overwrite user override data or secrets. It creates a backup when an older installation of this plugin already exists at the destination.
 
-### Deaktivieren
+## Activation-based injection
 
-```yaml
-plugins:
-  disabled:
-    - model-guidance
+The default mode is `injection_mode: activation`.
+
+Hermes injects plugin context into the current user message through the official `pre_llm_call` return value. The original user text is not rewritten and no visible assistant or synthetic user message is created.
+
+```text
+User text:
+Implement the feature and test it.
+
+Internal request context:
+Implement the feature and test it.
+
+<model_guidance ...>
+...
+</model_guidance>
 ```
 
-Oder dauerhaft über die Plugin-Einstellung:
+### Base model guidance
+
+Base guidance contains stable model/provider behavior that is useful across tasks. It is injected once when:
+
+- a session receives its first real user prompt;
+- the active model changes;
+- the session switches back to a previously used model;
+- the selected profile or user override changes the compiled guidance fingerprint.
+
+The block is explicitly marked as superseding earlier model guidance:
+
+```xml
+<model_guidance model="qwen3.8-flash" profile="qwen/qwen3.8-flash" revision="1" activation="2">
+Supersedes earlier model_guidance blocks.
+- ...
+</model_guidance>
+```
+
+The activation number is diagnostic metadata. It is deterministic and is not used as a secret or a random identifier.
+
+### Task guidance
+
+Task guidance contains only rules for the current deterministic task scopes, such as:
+
+- `coding`;
+- `repository-work`;
+- `research`;
+- `computer-use`;
+- `writing`;
+- `long-running-agent`;
+- `subagent`;
+- `tool-heavy`;
+- `kanban`.
+
+It is rendered separately:
+
+```xml
+<model_task_guidance scope="current-task" tasks="common,coding,repository-work,tool-heavy">
+Supersedes earlier model_task_guidance blocks.
+- ...
+</model_task_guidance>
+```
+
+Identical task scopes and task fingerprints are not injected repeatedly. When the task scope changes, only the new task block is sent. If the new scope has no special rule, the plugin can send a tiny scope-reset marker instead of repeating a large block.
+
+### Session-safe state
+
+Activation state is keyed by Hermes `session_id`, with `task_id` as a fallback for isolated workers. It is not keyed only by the process-global current model.
+
+Each bounded LRU entry tracks:
+
+- effective active model/profile identity;
+- activation generation;
+- last `turn_id`;
+- base guidance fingerprint;
+- last task scope signature;
+- task guidance fingerprint;
+- whether base/task guidance was injected.
+
+The state map is bounded to 256 entries. Parent sessions and subagent sessions therefore cannot contaminate one another. If Hermes/plugin state is lost after a process restart, the next real prompt safely receives base guidance again.
+
+Hermes currently invokes `pre_llm_call` once per user turn before the tool loop. The plugin also uses `turn_id` when supplied, so duplicate hook delivery for one turn does not duplicate context.
+
+### Compatibility mode
+
+For debugging or compatibility with older behavior, configure:
 
 ```yaml
 plugins:
   entries:
     model-guidance:
       settings:
-        enabled: false
+        injection_mode: every_turn
 ```
 
-## Runtime-Integration
+`every_turn` is deliberately not the default.
 
-Das Plugin registriert nur die offiziellen aktuellen Hermes-Schnittstellen:
+## Token budgets
 
-- `pre_llm_call`: dynamische, request-lokale Guidance; gültige Rückgabe ist
-  `{"context": "..."}`. Hermes injiziert diesen Kontext in die aktuelle User-Nachricht,
-  nicht in den stabilen System-Prompt. Dadurch bleibt Prompt-Caching intakt.
-- `pre_api_request`: **Observer**. Die aktuelle Hermes-Dokumentation ignoriert den
-  Rückgabewert. Das Plugin beobachtet begrenzte Runtime-Metadaten nur für Diagnostik und
-  behauptet nicht, API-Parameter zu ändern.
-- `on_session_start`: ausschließlich Diagnose; es ist nicht die Quelle der aktiven
-  Modellwahl.
-- Slash-Command `/model-guidance`: Diagnose und manueller Updatepfad.
+The default budgets are intentionally smaller than the previous single combined prompt budget:
 
-Die Modell-ID aus jedem `pre_llm_call` ist autoritativ. Es gibt keinen Prozess-globalen
-"aktuellen Modell"-Cache, der einen `/model`-Wechsel überleben und falsche Guidance
-injizieren könnte.
+```yaml
+plugins:
+  entries:
+    model-guidance:
+      settings:
+        max_base_guidance_chars: 1800
+        max_task_guidance_chars: 700
+        max_chars: 3600
+        max_rules: 32
+        max_family_rules: 16
+        max_task_rules: 8
+```
 
-Der Hook ruft weder ein Modell noch einen Provider auf. Normalbetrieb besteht nur aus
-lokalem Registry-Lookup, deterministischer Regelkompilierung und dem vorhandenen
-Hermes-LLM-Request. Unveränderte Modell-/Task-/Config-Kombinationen werden aus einem
-begrenzten In-Memory-Compiler-Cache bedient. Resolver-Ergebnisse werden ebenfalls
-gecached; Änderungen an Profilen, Overlap-Datei, Plugin-Konfiguration oder Compiler-
-Version invalidieren den Cache.
+`max_chars` remains supported for compatibility with existing configurations. Base and task layers have independent budgets, while the global rule limit still applies across both layers.
 
-## Profile und Matching
+The compiler selects rules deterministically by priority and stable rule ID. API/runtime recommendations are never converted into fake prompt instructions.
 
-Profile liegen als JSON-kompatibles YAML unter `profiles/<provider>/`. JSON ist absichtlich
-zulässig, damit der Normalbetrieb ohne PyYAML-Abhängigkeit funktioniert.
+## Model matching
 
-Ein Profile enthält unter anderem:
+Profile loading and matching are local and deterministic. No embeddings, fuzzy semantic search, or LLM classification are used.
 
-- `provider`, `model_family`, `exact_model_id`;
-- `aliases` und `match_prefixes`;
-- `inherits`, `remove_rules` und `negative_overrides`;
-- `source_urls`, `source_review_date`, `source_hash`, `source_type`;
-- `prompt_recommendations`;
-- `runtime_recommendations`;
-- optionale `source_marker`-Werte an einzelnen Empfehlungen;
-- Konfidenz und Profilrevision.
+Matching precedence is:
 
-Die Priorität ist:
+1. exact official normalized ID;
+2. exact explicit alias;
+3. known official snapshot/version alias;
+4. explicit profile prefix/pattern;
+5. recognized derivative of the most specific known exact model;
+6. recognized derivative of the most specific known family;
+7. provider/family fallback;
+8. safe unknown fallback with no invented prompt guidance.
 
-1. exact normalized ID;
-2. Alias;
-3. expliziter Prefix/Pattern;
-4. Provider-/Familienfallback;
-5. unbekannt ohne injizierte Guidance.
+The longest and most specific upstream match wins. For example, a derivative of `qwen3.8-flash` is resolved against that profile rather than the broader `qwen3.8` or `qwen` family profile.
 
-Beispiele:
+Existing router/provider forms continue to work:
 
 ```text
-gpt-5.6
 openai/gpt-5.6
 openrouter/openai/gpt-5.6
+anthropic/claude-opus-5
+google/gemini-3.5-flash
+qwen/qwen3.8-flash
 ```
 
-werden, wenn die Identifikation eindeutig ist, auf dasselbe OpenAI-Profil abgebildet.
-Aggressives Fuzzy Matching gibt es absichtlich nicht.
+Known provider prefixes are stripped only where the registry says they are provider/router namespaces. Arbitrary path prefixes are not blindly trusted.
 
-### Inheritance und negative Overrides
+## Community and derived model identifiers
 
-Ein neueres Modell erbt nicht automatisch alte Prompt-Workarounds. Wenn ein Profil
-`inherits` nutzt, werden die Eltern zuerst kompiliert; `remove_rules` und
-`negative_overrides` entfernen anschließend veraltete Regeln anhand ihrer stabilen IDs.
+The resolver can conservatively map common Hugging Face, Ollama, quantized, fine-tuned, and locally renamed IDs to an upstream profile when the basename contains a known local profile identifier.
 
-## Prompt vs. Runtime
+### Qwen examples
 
-Jede Empfehlung wird als eine dieser Klassen geführt:
+```text
+qwen3.8-flash
+  -> exact qwen/qwen3.8-flash
 
-- `PROMPT_APPLICABLE`: darf als kompakte Guidance injiziert werden;
-- `RUNTIME_APPLICABLE`: gehört in die Hermes-/Provider-Request-Konfiguration und wird
-  nicht als Fake-Prompt wie „think harder“ ausgegeben;
-- `INFORMATIONAL`: Diagnoseinformation ohne automatische Anwendung;
-- `UNSUPPORTED_BY_CURRENT_HERMES`: offiziell sinnvoll, aber über die aktuelle Plugin-API
-  nicht sicher anwendbar.
+qwen3.8-flash-0902
+  -> snapshot/pattern of qwen/qwen3.8-flash
 
-Die aktuelle Hermes-API erlaubt diesem Plugin nicht, über `pre_api_request` etwa
-`reasoning.effort`, `verbosity`, Compaction oder neue Tools zu setzen. Solche Hinweise
-bleiben deshalb sichtbar, aber werden nicht fälschlich als angewandt ausgegeben.
+qwen3.8-flash-obliterated
+  -> derivative of qwen/qwen3.8-flash
+  -> alignment derivative, medium confidence
 
-## Hermes-Overlap
+Qwen/Qwen3.8-27B
+  -> exact qwen/qwen3.8-27b
 
-`sources/hermes-overlap.yaml` erfasst Guidance, die Hermes bereits selbst liefert. Solche
-Regeln werden gezählt, aber nicht erneut injiziert. Beispiele sind generische
-Task-Vervollständigung und Teile der Tool-/Ausführungsdisziplin. Die Registry ist eine
-reviewte Kompatibilitätsmetadatei, kein zweiter System-Prompt.
+bartowski/Qwen3.8-27B-GGUF
+  -> packaging derivative of qwen/qwen3.8-27b
 
-## Task-aware Guidance
+unsloth/Qwen3.8-27B-bnb-4bit
+  -> packaging derivative of qwen/qwen3.8-27b
 
-Die Task-Erkennung ist deterministisch und konservativ. Sie verwendet die aktuelle
-User-Nachricht, vorhandene Tool-Nachrichten, Plattforminformationen und eindeutige
-Begriffe wie `coding`, `repository`, `browser`, `research`, `writing`, `subagent` oder
-`kanban`. Es wird kein zusätzliches LLM für die Klassifikation aufgerufen.
+qwen3.8:27b
+  -> Ollama-style packaging derivative of qwen/qwen3.8-27b
+```
 
-Mögliche Scopes sind `common`, `coding`, `repository-work`, `research`, `computer-use`,
-`writing`, `long-running-agent`, `subagent`, `tool-heavy` und `kanban`.
+The same approach handles examples such as:
 
-Das Standardlimit beträgt 3600 Zeichen. Nicht injizierte API-/Runtime-Regeln zählen nicht
-zum Prompttext. Über die Plugin-Settings sind zusätzlich `max_rules`,
-`max_family_rules` und `max_task_rules` begrenzbar. Regeln werden deterministisch nach
-Priorität ausgewählt; bei Überlauf fallen niedrig priorisierte Regeln weg. Die
-Tokenzahl wird ohne Provider-Tokenizer grob als `ceil(characters / 4)` geschätzt.
+```text
+claude-opus-5-custom
+  -> derivative of anthropic/claude-opus-5
 
-## User-Overrides
+gemini-3.5-flash-local
+  -> derivative of google/gemini-3.5-flash
 
-Managed-Updates werden unter folgendem Profil-Home gespeichert:
+deepseek-v4-pro-abliterated
+  -> alignment derivative of deepseek/deepseek-v4-pro
+
+kimi-k2.7-code-custom
+  -> community derivative when a matching local profile exists
+
+glm-5.1-fp8
+  -> packaging derivative of glm/glm-5.1
+
+mistral-medium-3-5-awq
+  -> packaging derivative of mistral/mistral-medium-3-5
+
+grok-4.6-local
+  -> community derivative of xai/grok-4.6
+```
+
+A basename is accepted only when it matches an exact profile, alias, or explicit profile prefix already present in the local registry. An unrelated community namespace does not cause an arbitrary model to inherit a profile.
+
+### Derivative types and confidence
+
+Diagnostics distinguish at least:
+
+- `packaging`: GGUF, AWQ, GPTQ, EXL2, MLX, FP8, INT4/INT8, BNB, Q4/Q8, and similar packaging markers;
+- `alignment`: abliterated, uncensored, DPO, SFT, LoRA, merged, roleplay, and similar post-training markers;
+- `community`: custom, local, community, Hugging Face, or other local naming markers.
+
+Exact and official pattern matches have high confidence. Derivative matches have medium confidence. Provider/family fallback has low confidence. The plugin does not claim that a fine-tune behaves identically to its upstream model.
+
+A profile recommendation may set `derivative_safe: false`. Such a rule is skipped for derivative matches while family and explicitly safe rules remain eligible. Existing rules default to `derivative_safe: true` for backward compatibility.
+
+The derivative marker registry is data-driven in:
+
+```text
+sources/derivative-modifiers.yaml
+```
+
+It can be extended without scattering new string checks through the resolver.
+
+## Profiles and inheritance
+
+Profiles are JSON-compatible YAML under `profiles/<provider>/`. JSON-compatible files keep normal operation independent of PyYAML.
+
+A profile can contain:
+
+- `provider`;
+- `model_family`;
+- `exact_model_id`;
+- `aliases`;
+- `match_prefixes`;
+- `inherits`;
+- `remove_rules` and `negative_overrides`;
+- `prompt_recommendations`;
+- `runtime_recommendations`;
+- source/provenance metadata;
+- `profile_revision` and `confidence`;
+- optional `derivative_safe` flags on recommendations.
+
+Inheritance is explicit. Parent profiles are compiled before the child profile, then stable rule IDs in `remove_rules` or `negative_overrides` are removed. A newer profile does not silently inherit an old workaround.
+
+Managed updates are written separately from bundled profiles and user overrides:
 
 ```text
 $HERMES_HOME/plugin-data/model-guidance/managed-profiles/<provider>/<model>.yaml
-```
-
-Eigene Profile liegen getrennt:
-
-```text
 $HERMES_HOME/plugin-data/model-guidance/user-overrides/<provider>/<model>.yaml
 ```
 
-User-Overrides werden nach Managed-Profilen geladen und gewinnen bei identischer
-`provider`/`exact_model_id`-Kombination. `/model-guidance update` schreibt niemals in
-den User-Override-Pfad. Ein Override ist ein vollständiges, validiertes Profil; als
-Ausgangspunkt kann die entsprechende Datei aus `profiles/` kopiert und anschließend
-angepasst werden.
+User overrides remain protected and win over managed/bundled data for the same provider/model key.
 
-## Offizielle Quellen
+## Prompt vs. runtime recommendations
 
-`sources/providers.yaml` ist das Quellenregister. Aktuell ist OpenAI als offizielle
-Integration eingetragen:
+Recommendations use one of these classifications:
 
-- Model Guidance: <https://developers.openai.com/api/docs/guides/latest-model>
-- Models: <https://developers.openai.com/api/docs/models>
+- `PROMPT_APPLICABLE`: may be compactly injected;
+- `RUNTIME_APPLICABLE`: belongs to request/API configuration and is not injected as prompt text;
+- `INFORMATIONAL`: diagnostic only;
+- `UNSUPPORTED_BY_CURRENT_HERMES`: useful provider information that the current plugin API cannot safely apply.
 
-Die OpenAI-Profile wurden gegen den offiziellen Model-Guidance-Text geprüft. Die
-`source_hash`-Werte dokumentieren den geprüften Quellstand. Die nicht-OpenAI-Fallbacks
-injizieren absichtlich nichts, solange kein verlässlich belegtes, provider-spezifisches
-Prompting-Profil gepflegt ist. So werden keine Provider-Empfehlungen erfunden.
+Hermes `pre_api_request` is an observer in the current API. The plugin therefore does not claim to mutate `reasoning_effort`, verbosity, compaction, tools, or other API parameters through that hook.
 
-### Profilgetriebene Source-Marker
+## Hermes overlap filtering
 
-`source_marker` ist ein stabiler Abschnittsname oder eine unterscheidungskräftige
-Phrase aus der offiziellen Quelle. Der Marker gehört direkt zur Regel im Profil;
-`OpenAIAdapter` führt keine parallele Python-Tabelle mit Regel-IDs. Marker werden
-ausschließlich während `/model-guidance update` geprüft und niemals in den Prompt
-injiziert. Remote-Dokumentation kann damit nur bereits vorhandene Regeln als
-`verified` oder `missing` markieren. Sie kann keine neuen Regel-IDs, Texte oder
-Prompt-Regeln erzeugen.
+`sources/hermes-overlap.yaml` records reviewed guidance already supplied by Hermes itself. Overlap rules are reported diagnostically but are not injected a second time.
 
-Bei jedem erfolgreichen Source-Refresh werden `verified_rule_anchors`,
-`missing_rule_anchors`, `source_anchor_count` und die Zahl markerloser Regeln neu
-berechnet. Alte Verifikationen werden nicht weitergeführt, wenn ein Abschnitt aus
-der aktuellen Quelle verschwunden ist. `status` und `sources` zeigen diese Werte
-diagnostisch an.
+The overlap registry is compatibility metadata, not a second system prompt.
 
-## Update-Prozess
+## Official source verification
 
-Normalbetrieb ist offline. Der manuelle Befehl:
+`source_marker` belongs to the individual profile recommendation and is used only by explicit source updates.
 
-```text
-/model-guidance update
-```
+Source markers:
 
-macht ausschließlich Folgendes:
+- are never injected into the target model context;
+- are checked against the current official source during `/model-guidance update`;
+- produce verified/missing diagnostics;
+- cannot create arbitrary new rule IDs or rule text from remote documentation.
 
-1. liest die lokal erlaubte Quellenregistry;
-2. ruft nur HTTPS-Quellen von erlaubten offiziellen OpenAI-Hosts ab;
-3. begrenzt Zeit, Redirects und Datenmenge;
-4. speichert Rohtext und SHA-256-Metadaten plugin-eigen;
-5. prüft nur `source_marker`-Werte, die bereits in lokalen Profilregeln stehen;
-6. validiert das resultierende Profil vor Aktivierung;
-7. schreibt nur nach `managed-profiles/`;
-8. meldet `ADDED`, `MODIFIED`, `REMOVED` und Fehler.
+Normal turns never fetch or parse provider documentation.
 
-`/model-guidance update --offline` testet den Pfad ohne Netzwerkzugriff. Remote-Text wird
-nie importiert, als Python ausgeführt, als Tool registriert oder als Anweisung an einen
-Compiler interpretiert. Bei Fehlern bleiben bestehende lokale Profile aktiv.
-
-## Diagnosebefehle
+## Commands
 
 ```text
 /model-guidance status
 /model-guidance show
 /model-guidance stats
-/model-guidance test openai/gpt-5.6
-/model-guidance test openrouter/openai/gpt-5.4
+/model-guidance test <model-id>
 /model-guidance models
 /model-guidance sources
 /model-guidance reload
@@ -296,93 +369,101 @@ Compiler interpretiert. Bei Fehlern bleiben bestehende lokale Profile aktiv.
 /model-guidance update --offline
 ```
 
-Besonders wichtig:
+`/model-guidance test <model-id>` is fully offline and reports:
+
+- raw and normalized IDs;
+- upstream model/profile;
+- provider and family;
+- match kind and confidence;
+- derivative type and modifiers;
+- inherited profiles;
+- selected rules and character count.
+
+`status` additionally reports activation generation, base/task fingerprints, injection state, current task scopes, cache state, and source-anchor state. This metadata is not sent to the target model.
+
+## Official sources and updates
+
+`sources/providers.yaml` is the allowlisted source registry. The current bounded source updater has an OpenAI adapter and uses official HTTPS hosts only.
 
 ```text
-/model-guidance test <model-id>
+/model-guidance update
 ```
 
-kontaktiert **niemals** das Modell und **niemals** den Provider. Es testet nur die lokale
-Normalisierung, Provider-/Familienauflösung, Profilwahl, Filterung und Kompilierung.
+performs the explicit update workflow:
 
-`status` zeigt unter anderem aktives Modell, normalisierte ID, Provider, Familie, Profil,
-Quellen, injizierte und Hermes-unterdrückte Regeln, Runtime-/Unsupported-Hinweise und
-die Zeichenzahl, geschätzte Prompt-Tokens und den letzten Cache-Status. `stats` zeigt
-zusätzlich explizit, dass im Normalbetrieb null zusätzliche LLM- und Netzwerkaufrufe
-stattfinden, sowie Resolver-/Compiler-Cache-Hits und -Misses. `show` trennt:
+1. load the local source registry;
+2. fetch only allowlisted HTTPS sources;
+3. enforce timeout, redirect, and size limits;
+4. calculate source hashes and review metadata;
+5. verify only profile-declared `source_marker` values;
+6. accept only bounded compiler-owned profile changes;
+7. write managed overlays, never user overrides;
+8. invalidate local caches safely.
 
-- `ACTIVE PROMPT GUIDANCE`;
-- `HERMES-HANDLED GUIDANCE`;
-- `RUNTIME SETTINGS`;
-- `UNSUPPORTED RECOMMENDATIONS`;
-- `INFORMATIONAL RECOMMENDATIONS`;
-- `SOURCE PROVENANCE`.
+`/model-guidance update --offline` validates the update path without network access.
 
-## Weitere Provider hinzufügen
+Remote text is treated as untrusted data. It is never executed as code, registered as a tool, or interpreted as a free-form prompt rule generator.
 
-### Neuer Provider
+## Development and tests
 
-1. Einen tatsächlich existierenden offiziellen Quelllink verifizieren.
-2. Den Provider in `sources/providers.yaml` registrieren.
-3. Einen Provider-Adapter in `model_guidance_sources.py` ergänzen, wenn die
-   Dokumentstruktur nicht OpenAI entspricht.
-4. Tests für erlaubte Hosts, Parsing und Offline-Fehler hinzufügen.
-5. Profile unter `profiles/<provider>/` anlegen.
-6. Nur offiziell belegte Regeln übernehmen; bei Unsicherheit ein leeres Familienprofil
-   verwenden.
-
-### Neue Familie oder Exact-ID
-
-Eine neue Familie erhält ein eigenes `*-family.yaml` mit leerer Prompt-Liste, bis echte
-Quellenbelege vorhanden sind. Ein exactes Profil darf eigene Regeln, Source-Metadaten und
-negative Overrides tragen. Danach:
-
-```text
-/model-guidance reload
-/model-guidance test provider/model
-/model-guidance show
-```
-
-## Entwicklung und Tests
-
-Die Tests benötigen nur lokale Python-Abhängigkeiten:
+Install local development dependencies:
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python -m pytest -q
 ```
 
-Die Suite testet unter anderem Registry-Loading, fehlerhafte Profile, Aliase,
-OpenRouter-IDs, Provider-/Familien-Matching, Inheritance-/Override-Pfade,
-Hermes-Overlap, Task-Filter, Size-Limits, User-Overrides, Model Switching,
-unknown models, Runtime-Hooks, Commands, Offline-Updates, SSRF-/HTML-Grenzen,
-deterministische Rule-Limits, Cache-Hits und einen Netzwerk-Wächter für den
-Normalpfad.
+Run the repository tests:
 
-Es gibt bewusst keine Tests gegen echte GPT-, Claude-, Gemini-, Qwen-, DeepSeek-, Kimi-,
-GLM-, Llama-, Mistral- oder Grok-Endpunkte. Die IDs werden simuliert; die Qualität des
-zugrunde liegenden Modells ist nicht Bestandteil dieses Plugins.
+```bash
+python -m pytest -q
+python -m compileall -q .
+```
 
-## Einschränkungen
+The suite uses simulated IDs, local profiles, mocked hooks, temporary overlay directories, and network guards. It deliberately does not call GPT, Claude, Gemini, Qwen, DeepSeek, Kimi, GLM, Mistral, Grok, or other paid/unavailable endpoints.
 
-- Hermes `pre_api_request` ist aktuell nur Beobachtung; Runtime-Parameter werden nicht
-  verändert.
-- Der Compiler-Cache ist pro Plugin-Prozess flüchtig. Nach einem Hermes-Neustart werden
-  lokale Profile erneut gelesen; es findet dabei weiterhin kein Netzwerkzugriff statt.
-- `/model-guidance update` ist zunächst eine sichere, deterministische Change-/Metadata-
-  Aktualisierung. Freiform-LLM-Extraktion aus Providerseiten ist bewusst nicht aktiviert.
-- Nicht-OpenAI-Profile sind derzeit sichere Nullprofile ohne zusätzliche Prompt-Injektion.
-- Neue Model IDs werden erst nach einem lokalen Profilupdate oder einer passenden
-  Familienregel mit provider-spezifischer Guidance behandelt.
-- User-Plugins sind in Hermes absichtlich opt-in. Ohne Eintrag in `plugins.enabled` lädt
-  Hermes das Plugin nicht.
+Covered behavior includes:
 
-## Für Coding Agents
+- profile and source-marker validation;
+- provider/router resolution;
+- exact, alias, prefix, snapshot, and derivative matching;
+- Qwen/Hugging Face/Ollama examples;
+- conservative unknown fallback;
+- inheritance and user overrides;
+- Hermes overlap filtering;
+- base/task layer compilation;
+- activation-based injection and task deduplication;
+- model switching and switching back;
+- profile revision invalidation;
+- session and subagent isolation;
+- same-turn idempotency;
+- bounded LRU state;
+- `every_turn` compatibility mode;
+- fail-open runtime hooks;
+- offline update and source-anchor validation;
+- zero normal-runtime network and LLM calls.
 
-Arbeite zuerst in `model_guidance_core.py` und schreibe reine Resolver-/Compiler-Tests.
-Ändere Hermes Core nicht für provider-spezifische Logik. Halte `pre_llm_call` schnell und
-offline, behandle Dokumentation als untrusted data, bewahre User-Overrides und prüfe
-immer den echten Hermes-Hookvertrag. Der normale Hook darf keine Netzwerk-, Subagent-
-oder Modellaufrufe hinzufügen. Ein neues Profil darf keine alten Workarounds erben,
-solange diese Vererbung nicht ausdrücklich belegt und getestet ist. Nach Änderungen
-`python -m pytest -q` und `python -m compileall -q .` ausführen.
+GitHub Actions runs the test and compile checks on Python 3.10, 3.11, and 3.12.
+
+## Limitations
+
+- Hermes `pre_api_request` is observer-only; runtime/API parameters are not mutated by this plugin.
+- Activation state is process-local and intentionally bounded. A process restart may re-inject base guidance once.
+- If Hermes cannot provide a stable `session_id` or `task_id`, the plugin uses safe request-local behavior and may re-inject rather than risk stale suppression.
+- Fine-tuned, merged, uncensored, or abliterated derivatives can materially differ from their upstream model. Upstream guidance is best effort only.
+- Quantization may change quality and tool behavior even when upstream guidance remains generally useful.
+- Unknown names are not aggressively fuzzy-matched and receive no invented model-specific prompt guidance.
+- Source updates are explicit and currently provider-adapter driven; documentation text is never freely converted into new prompt rules.
+- The plugin must be listed in `plugins.enabled`; Hermes user plugins are opt-in.
+
+## Adding a provider or model
+
+1. Verify a real official source and record it in `sources/providers.yaml`.
+2. Add a bounded adapter only when the source structure requires it.
+3. Add an explicit profile under `profiles/<provider>/`.
+4. Keep prompt and runtime/API recommendations separate.
+5. Mark fragile exact-model rules with `derivative_safe: false` when appropriate.
+6. Add aliases and prefixes conservatively.
+7. Add simulated resolver/runtime tests.
+8. Run pytest, compileall, and the offline update tests.
+
+Do not add a fuzzy or semantic matcher to compensate for missing profile data. A safe unknown result is preferable to silently applying the wrong model's instructions.

@@ -1,0 +1,44 @@
+{
+  "provider": "google",
+  "model_family": "gemini-3.5-flash",
+  "exact_model_id": "gemini-3.5-flash",
+  "aliases": [
+    "gemini-3.5-flash"
+  ],
+  "match_prefixes": [
+    "gemini-3.5-flash-"
+  ],
+  "inherits": [
+    "google/gemini-3-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://ai.google.dev/gemini-api/docs/prompting-strategies",
+    "https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.5"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [
+    {
+      "id": "google.gemini-3.5-flash.thinking-effort",
+      "text": "The provider's default thinking effort is medium; low is an efficiency option for shorter agentic or coding loops.",
+      "scopes": [
+        "common"
+      ],
+      "priority": 60,
+      "classification": "RUNTIME_APPLICABLE",
+      "plugin_injection": false,
+      "handled_by_hermes": false,
+      "hermes_overlap_id": "",
+      "source_section": "What's new",
+      "confidence": "high",
+      "source_marker": "New default effort level"
+    }
+  ],
+  "negative_overrides": [],
+  "metadata": {}
+}

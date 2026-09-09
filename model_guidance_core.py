@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 LOGGER = logging.getLogger(__name__)
-COMPILER_VERSION = "1.0.0"
+COMPILER_VERSION = "2.0.0"
 VALID_CLASSIFICATIONS = {
     "PROMPT_APPLICABLE",
     "RUNTIME_APPLICABLE",
@@ -42,6 +42,36 @@ _PROVIDER_ALIASES = {
     "qwen": "qwen",
 }
 
+_DEFAULT_DERIVATIVE_REGISTRY: dict[str, tuple[str, ...]] = {
+    "packaging": (
+        "gguf", "awq", "gptq", "exl2", "mlx", "fp8", "int8", "int4", "4bit", "8bit",
+        "bnb", "quant", "quantized", "q2", "q3", "q4", "q5", "q6", "q8",
+    ),
+    "alignment": (
+        "abliterated", "obliterated", "uncensored", "dpo", "sft", "lora", "merged",
+        "finetune", "fine-tuned", "roleplay",
+    ),
+    "community": ("custom", "local", "community", "hf", "huggingface", "ollama"),
+    "snapshot_patterns": (
+        r"^[0-9]{4}$", r"^[0-9]{8}$", r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        r"^v[0-9]+(?:[.-][0-9]+)*$",
+    ),
+    "ignored_tags": ("latest", "default"),
+}
+
+
+def _as_bool(value: Any, default: bool) -> bool:
+    """Parse profile booleans without treating the string ``\"false\"`` as true."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return default
+
 
 class ProfileError(ValueError):
     """Raised when a managed or user profile violates the bounded schema."""
@@ -64,6 +94,7 @@ class Recommendation:
     hermes_overlap_id: str = ""
     source_marker: str = ""
     applied_when: str = ""
+    derivative_safe: bool = True
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any], *, default_url: str = "") -> "Recommendation":
@@ -102,6 +133,7 @@ class Recommendation:
             hermes_overlap_id=str(raw.get("hermes_overlap_id", "")).strip(),
             source_marker=source_marker,
             applied_when=str(raw.get("applied_when", "")).strip(),
+            derivative_safe=_as_bool(raw.get("derivative_safe", True), True),
         )
 
 
@@ -189,6 +221,7 @@ class ModelProfile:
                 "hermes_overlap_id": item.hermes_overlap_id,
                 "source_marker": item.source_marker,
                 "applied_when": item.applied_when,
+                "derivative_safe": item.derivative_safe,
             }
         return {
             "provider": self.provider,
@@ -275,6 +308,9 @@ class MatchResult:
     match_kind: str
     confidence: str
     reason: str
+    upstream_model: str = ""
+    derivative_type: str = ""
+    modifiers: tuple[str, ...] = ()
 
 
 class ProfileRepository:
@@ -294,6 +330,7 @@ class ProfileRepository:
         self.user_override_root = Path(user_override_root) if user_override_root else None
         self.errors: list[str] = []
         self.profiles: list[ModelProfile] = []
+        self.derivative_registry = self._load_derivative_registry()
         self.generation = 0
         self.resolve_cache_hits = 0
         self.resolve_cache_misses = 0
@@ -301,8 +338,24 @@ class ProfileRepository:
         self._file_signature: tuple[tuple[str, int, int], ...] = ()
         self.reload()
 
+    def _load_derivative_registry(self) -> dict[str, tuple[str, ...]]:
+        """Load bounded derivative markers from local data, with safe defaults."""
+        path = self.root.parent / "sources" / "derivative-modifiers.yaml"
+        try:
+            raw = load_data(path)
+        except Exception:
+            return dict(_DEFAULT_DERIVATIVE_REGISTRY)
+        registry: dict[str, tuple[str, ...]] = {}
+        for key, default in _DEFAULT_DERIVATIVE_REGISTRY.items():
+            values = raw.get(key, default)
+            if not isinstance(values, list):
+                values = list(default)
+            registry[key] = tuple(str(value).strip().lower() for value in values if str(value).strip())
+        return registry
+
     def reload(self) -> None:
-        self.errors.clear()
+        self.errors = []
+        self.derivative_registry = self._load_derivative_registry()
         bundled: dict[tuple[str, str], ModelProfile] = {}
         for path in sorted(self.root.glob("*/*.yaml")):
             try:
@@ -339,13 +392,14 @@ class ProfileRepository:
 
     def _calculate_file_signature(self) -> tuple[tuple[str, int, int], ...]:
         entries: list[tuple[str, int, int]] = []
-        for root in self._profile_roots():
-            for path in sorted(root.glob("*/*.yaml")):
-                try:
-                    stat = path.stat()
-                except OSError:
-                    continue
-                entries.append((str(path), stat.st_mtime_ns, stat.st_size))
+        roots = list(self._profile_roots())
+        registry_path = self.root.parent / "sources" / "derivative-modifiers.yaml"
+        for path in [registry_path, *[path for root in roots for path in sorted(root.glob("*/*.yaml"))]]:
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            entries.append((str(path), stat.st_mtime_ns, stat.st_size))
         return tuple(entries)
 
     def refresh_if_changed(self) -> bool:
@@ -369,29 +423,126 @@ class ProfileRepository:
         self.resolve_cache_misses += 1
         normalized = normalize_id(raw)
         provider_hint = _PROVIDER_ALIASES.get(str(provider_hint or "").strip().lower(), str(provider_hint or "").strip().lower())
-        scored: list[tuple[int, ModelProfile, str, str]] = []
+        detected_provider = provider_from_model(raw)
+        router_hints = {"openrouter", "together", "fireworks", "groq", "perplexity", "bedrock"}
+        explicit_provider = (
+            detected_provider
+            if provider_hint in router_hints and detected_provider != "unknown"
+            else provider_hint or detected_provider
+        )
+        provider_restriction = explicit_provider if explicit_provider != "unknown" else ""
+        variants = _candidate_variants(raw, self.derivative_registry)
+        scored: list[tuple[int, ModelProfile, str, str, str, tuple[str, ...]]] = []
         for profile in self.profiles:
-            provider = provider_hint or provider_from_model(raw, profile.provider)
-            if provider not in {profile.provider, "unknown"}:
+            if provider_restriction and provider_restriction != profile.provider:
                 continue
             candidates = {profile.exact_model_id, *profile.aliases}
-            if normalized in candidates:
-                kind = "exact" if normalized == profile.exact_model_id else "alias"
-                scored.append((10000 + len(normalized), profile, kind, "explicit exact/alias match"))
-                continue
+            for candidate, source in variants:
+                if candidate in candidates:
+                    kind = "exact" if candidate == profile.exact_model_id else "alias"
+                    derivative_type = ""
+                    modifiers: tuple[str, ...] = ()
+                    if source == "community":
+                        kind, derivative_type, modifiers = "derivative", "community", ("community-namespace",)
+                    elif source == "ollama":
+                        kind, derivative_type, modifiers = "derivative", "packaging", ("ollama-tag",)
+                    scored.append((20000 + len(candidate), profile, kind, "explicit exact/alias match", derivative_type, modifiers))
+                    continue
+                for base in candidates:
+                    if not candidate.startswith(base + "-"):
+                        continue
+                    suffix = candidate[len(base) + 1:]
+                    derivative_type, modifiers = _classify_derivative_suffix(suffix, self.derivative_registry)
+                    if source == "community" and not derivative_type:
+                        derivative_type, modifiers = "community", ("community-namespace",)
+                    if source == "ollama" and not derivative_type:
+                        derivative_type, modifiers = "packaging", ("ollama-tag",)
+                    if derivative_type:
+                        scored.append((12000 + len(base), profile, "derivative", f"recognized derivative of {base}", derivative_type, modifiers))
+                    elif _is_snapshot_suffix(suffix, self.derivative_registry):
+                        scored.append((11000 + len(base), profile, "pattern", f"recognized snapshot of {base}", "", ()))
             for prefix in profile.match_prefixes:
-                if normalized.startswith(prefix):
-                    scored.append((7000 + len(prefix), profile, "pattern", f"explicit prefix {prefix}"))
+                if not candidate.startswith(prefix):
+                    continue
+                suffix = candidate[len(prefix):].lstrip("-._")
+                derivative_type, modifiers = _classify_derivative_suffix(suffix, self.derivative_registry)
+                if source == "community" and not derivative_type:
+                    derivative_type, modifiers = "community", ("community-namespace",)
+                if source == "ollama" and not derivative_type:
+                    derivative_type, modifiers = "packaging", ("ollama-tag",)
+                if derivative_type:
+                    scored.append((9000 + len(prefix), profile, "derivative", f"recognized derivative under prefix {prefix}", derivative_type, modifiers))
+                else:
+                    scored.append((7000 + len(prefix), profile, "pattern", f"explicit prefix {prefix}", "", ()))
         if scored:
-            _, profile, kind, reason = max(scored, key=lambda item: item[0])
-            result = MatchResult(raw, normalized, profile.provider, profile.model_family, profile, kind, "high", reason)
+            _, profile, kind, reason, derivative_type, modifiers = max(scored, key=lambda item: item[0])
+            confidence = "medium" if kind == "derivative" else "high"
+            result = MatchResult(
+                raw, normalized, profile.provider, profile.model_family, profile, kind, confidence, reason,
+                profile.exact_model_id, derivative_type, modifiers,
+            )
             self._resolve_cache[cache_key] = result
             return result
         detected = provider_hint or provider_from_model(raw)
         family = infer_family(normalized, detected)
-        result = MatchResult(raw, normalized, detected, family, None, "fallback", "low" if detected != "unknown" else "unknown", "no safe local profile matched")
+        result = MatchResult(
+            raw, normalized, detected, family, None, "fallback",
+            "low" if detected != "unknown" else "unknown", "no safe local profile matched",
+        )
         self._resolve_cache[cache_key] = result
         return result
+
+
+def _candidate_variants(raw_model_id: str, registry: Mapping[str, Sequence[str]]) -> tuple[tuple[str, str], ...]:
+    """Return deterministic IDs worth matching without trusting arbitrary namespaces."""
+    normalized = normalize_id(raw_model_id)
+    variants: list[tuple[str, str]] = [(normalized, "normalized")]
+    parts = [part for part in normalized.split("/") if part]
+    if len(parts) > 1:
+        variants.append((parts[-1], "community"))
+    if ":" in normalized and "/" not in normalized:
+        base, tag = normalized.rsplit(":", 1)
+        if base and tag:
+            ignored_tags = set(registry.get("ignored_tags", ()))
+            if tag not in ignored_tags:
+                variants.insert(0, (f"{base}-{tag}", "ollama"))
+            variants.append((base, "ollama-alias"))
+    deduped: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for variant in variants:
+        if variant[0] and variant not in seen:
+            deduped.append(variant)
+            seen.add(variant)
+    return tuple(deduped)
+
+
+def _classify_derivative_suffix(
+    suffix: str,
+    registry: Mapping[str, Sequence[str]],
+) -> tuple[str, tuple[str, ...]]:
+    """Classify known packaging/alignment/community suffix markers."""
+    normalized = suffix.lower().replace("_", "-")
+    tokens = tuple(token for token in re.split(r"[-.+:]", normalized) if token)
+    found: list[tuple[str, str]] = []
+    for category in ("alignment", "packaging", "community"):
+        for marker in registry.get(category, ()):
+            marker_normalized = marker.lower().replace("_", "-")
+            if marker_normalized in tokens or marker_normalized in normalized:
+                found.append((category, marker_normalized))
+            elif marker_normalized.startswith("q") and marker_normalized[1:].isdigit():
+                if any(token.startswith(marker_normalized) for token in tokens):
+                    found.append((category, marker_normalized))
+    if not found:
+        return "", ()
+    categories = {category for category, _ in found}
+    selected = "alignment" if "alignment" in categories else "packaging" if "packaging" in categories else "community"
+    modifiers = tuple(dict.fromkeys(marker for category, marker in found if category == selected))
+    return selected, modifiers
+
+
+def _is_snapshot_suffix(suffix: str, registry: Mapping[str, Sequence[str]]) -> bool:
+    normalized = suffix.lower().replace("_", "-")
+    return any(re.fullmatch(pattern, normalized) for pattern in registry.get("snapshot_patterns", ()))
 
 
 def infer_family(normalized: str, provider: str) -> str:
@@ -464,6 +615,10 @@ class CompilationResult:
     characters: int
     truncated: bool
     errors: tuple[str, ...] = ()
+    base_prompt: tuple[Recommendation, ...] = ()
+    task_prompt: tuple[Recommendation, ...] = ()
+    base_text: str = ""
+    task_text: str = ""
 
 
 def _merge_recommendations(profile: ModelProfile, repository: ProfileRepository) -> tuple[Recommendation, ...]:
@@ -504,6 +659,8 @@ def compile_guidance(
     max_rules: int = 32,
     max_family_rules: int = 16,
     max_task_rules: int = 8,
+    max_base_chars: int | None = None,
+    max_task_chars: int | None = None,
     hermes_overlap: HermesOverlap | None = None,
     runtime_observation: Mapping[str, Any] | None = None,
 ) -> CompilationResult:
@@ -525,13 +682,16 @@ def compile_guidance(
     for item in all_rules:
         if not any(scope in tasks for scope in item.scopes):
             continue
-        if item.category == "runtime" or item.classification == "RUNTIME_APPLICABLE":
+        if item.category == "runtime":
             if item.classification == "RUNTIME_APPLICABLE":
                 runtime.append(item)
             elif item.classification == "UNSUPPORTED_BY_CURRENT_HERMES":
                 unsupported.append(item)
             elif item.classification == "INFORMATIONAL":
                 informational.append(item)
+            continue
+        if item.classification == "RUNTIME_APPLICABLE":
+            runtime.append(item)
             continue
         if item.classification == "UNSUPPORTED_BY_CURRENT_HERMES":
             unsupported.append(item)
@@ -542,48 +702,42 @@ def compile_guidance(
         if overlap.handles(item):
             handled.append(item)
             continue
+        if match.match_kind == "derivative" and not item.derivative_safe:
+            continue
         if item.plugin_injection:
             active.append(item)
     active.sort(key=lambda item: (-item.priority, item.id))
-    limit = max(64, int(max_chars))
-    header = (
-        "<model_guidance>\n"
-        f"Model {match.normalized_model_id} ({match.provider}/{match.model_family}); apply only relevant rules.\n"
+    base_candidates = [item for item in active if "common" in item.scopes]
+    task_candidates = [
+        item for item in active
+        if "common" not in item.scopes and any(scope in tasks and scope != "common" for scope in item.scopes)
+    ]
+    base_limit = max(64, int(max_base_chars if max_base_chars is not None else max_chars))
+    task_limit = max(64, int(max_task_chars if max_task_chars is not None else max_chars))
+    base_selected, base_truncated = _select_layer(base_candidates, base_limit, max_rules, max_family_rules, max_task_rules, tasks)
+    task_selected, task_truncated = _select_layer(
+        task_candidates,
+        task_limit,
+        max(0, int(max_rules) - len(base_selected)),
+        max_family_rules,
+        max_task_rules,
+        tasks,
     )
-    closing = "</model_guidance>"
-    if len(header) + len(closing) > limit:
-        header = "<model_guidance>\n"
-    lines = [header]
-    chars = len(header)
-    selected: list[Recommendation] = []
-    selected_family = 0
-    selected_task = 0
-    truncated = False
-    for item in active:
-        is_family_rule = "common" not in item.scopes
-        is_task_rule = any(scope in tasks and scope != "common" for scope in item.scopes)
-        if len(selected) >= max(0, int(max_rules)):
-            truncated = True
-            continue
-        if is_family_rule and selected_family >= max(0, int(max_family_rules)):
-            truncated = True
-            continue
-        if is_task_rule and selected_task >= max(0, int(max_task_rules)):
-            truncated = True
-            continue
-        line = f"- {item.text}\n"
-        if chars + len(line) + len(closing) > limit:
-            truncated = True
-            continue
-        lines.append(line)
-        chars += len(line)
-        selected.append(item)
-        if is_family_rule:
-            selected_family += 1
-        if is_task_rule:
-            selected_task += 1
-    lines.append(closing)
-    text = "".join(lines)
+    base_text = "".join(f"- {item.text}\n" for item in base_selected).rstrip()
+    task_text = "".join(f"- {item.text}\n" for item in task_selected).rstrip()
+    selected = tuple(base_selected + task_selected)
+    legacy_lines = [
+        "<model_guidance>\n",
+        f"Model {match.normalized_model_id} ({match.provider}/{match.model_family}); apply only relevant rules.\n",
+    ]
+    legacy_lines.extend(f"- {item.text}\n" for item in selected)
+    legacy_lines.append("</model_guidance>")
+    full_text = "".join(legacy_lines)
+    text = full_text
+    truncated = base_truncated or task_truncated
+    if len(text) > max(64, int(max_chars)):
+        text = _truncate_compiled_text(legacy_lines, max(64, int(max_chars)))
+        truncated = True
     observation = runtime_observation or {}
     if observation:
         runtime = tuple(item for item in runtime if _runtime_observed(item, observation)) + tuple(
@@ -591,8 +745,65 @@ def compile_guidance(
         )
     inherited = tuple(match.profile.inherits)
     return CompilationResult(
-        match, tasks, text if selected else "", tuple(selected), tuple(handled), tuple(runtime), tuple(unsupported), tuple(informational), inherited, len(text if selected else ""), truncated, tuple(errors)
+        match, tasks, text if selected else "", tuple(selected), tuple(handled), tuple(runtime), tuple(unsupported), tuple(informational), inherited, len(text if selected else ""), truncated, tuple(errors),
+        tuple(base_selected), tuple(task_selected), base_text, task_text,
     )
+
+
+def _select_layer(
+    candidates: Sequence[Recommendation],
+    limit: int,
+    max_rules: int,
+    max_family_rules: int,
+    max_task_rules: int,
+    tasks: Sequence[str],
+) -> tuple[list[Recommendation], bool]:
+    """Select one compact guidance layer under deterministic rule and character limits."""
+    selected: list[Recommendation] = []
+    family_count = 0
+    task_count = 0
+    truncated = False
+    chars = 0
+    for item in candidates:
+        is_family_rule = "common" not in item.scopes
+        is_task_rule = (
+            "common" not in item.scopes
+            and any(scope in tasks and scope != "common" for scope in item.scopes)
+        )
+        if len(selected) >= max(0, int(max_rules)):
+            truncated = True
+            continue
+        if is_family_rule and family_count >= max(0, int(max_family_rules)):
+            truncated = True
+            continue
+        if is_task_rule and task_count >= max(0, int(max_task_rules)):
+            truncated = True
+            continue
+        line = f"- {item.text}\n"
+        if chars + len(line) > limit:
+            truncated = True
+            continue
+        selected.append(item)
+        chars += len(line)
+        family_count += int(is_family_rule)
+        task_count += int(is_task_rule)
+    return selected, truncated
+
+
+def _truncate_compiled_text(lines: Sequence[str], limit: int) -> str:
+    """Keep the wrapper valid while applying the legacy combined budget."""
+    if not lines:
+        return ""
+    opening = lines[0]
+    closing = lines[-1]
+    body: list[str] = []
+    chars = len(opening) + len(closing)
+    for line in lines[1:-1]:
+        if chars + len(line) > limit:
+            break
+        body.append(line)
+        chars += len(line)
+    return opening + "".join(body) + closing
 
 
 def runtime_rule_observed(item: Recommendation, observation: Mapping[str, Any]) -> bool:

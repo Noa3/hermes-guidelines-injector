@@ -1,0 +1,28 @@
+{
+  "provider": "mistral",
+  "model_family": "mistral-medium-3.5",
+  "exact_model_id": "mistral-medium-3-5",
+  "aliases": [
+    "mistral-medium-3-5"
+  ],
+  "match_prefixes": [
+    "mistral-medium-3-5-"
+  ],
+  "inherits": [
+    "mistral/mistral-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://docs.mistral.ai/inference/prompting",
+    "https://docs.mistral.ai/models/mistral-medium-3-5-26-04"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}

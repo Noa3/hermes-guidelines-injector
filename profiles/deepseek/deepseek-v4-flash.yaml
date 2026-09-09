@@ -1,0 +1,29 @@
+{
+  "provider": "deepseek",
+  "model_family": "deepseek-v4",
+  "exact_model_id": "deepseek-v4-flash",
+  "aliases": [
+    "deepseek-v4-flash",
+    "deepseek-v4-flash-0731"
+  ],
+  "match_prefixes": [
+    "deepseek-v4-flash-"
+  ],
+  "inherits": [
+    "deepseek/deepseek-family"
+  ],
+  "remove_rules": [],
+  "source_urls": [
+    "https://api-docs.deepseek.com/guides/thinking_mode/",
+    "https://api-docs.deepseek.com/updates"
+  ],
+  "source_review_date": "2026-09-09",
+  "source_hash": "",
+  "source_type": "official",
+  "profile_revision": "1",
+  "confidence": "high",
+  "prompt_recommendations": [],
+  "runtime_recommendations": [],
+  "negative_overrides": [],
+  "metadata": {}
+}
