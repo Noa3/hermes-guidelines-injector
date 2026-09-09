@@ -82,6 +82,10 @@ class Recommendation:
         scopes = tuple(str(s).strip() for s in raw.get("scopes", ["common"]) if str(s).strip())
         if not scopes:
             scopes = ("common",)
+        source_marker_raw = raw.get("source_marker", "")
+        source_marker = "" if source_marker_raw is None else str(source_marker_raw).strip()
+        if len(source_marker) > 240:
+            raise ProfileError(f"source_marker is too long for {rid}")
         return cls(
             id=rid,
             text=text,
@@ -96,7 +100,7 @@ class Recommendation:
             source_type=str(raw.get("source_type", "official")).strip(),
             confidence=str(raw.get("confidence", "high")).strip().lower(),
             hermes_overlap_id=str(raw.get("hermes_overlap_id", "")).strip(),
-            source_marker=str(raw.get("source_marker", "")).strip(),
+            source_marker=source_marker,
             applied_when=str(raw.get("applied_when", "")).strip(),
         )
 

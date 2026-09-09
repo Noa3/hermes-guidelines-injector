@@ -11,9 +11,9 @@
   "profile_revision": "1",
   "confidence": "high",
   "prompt_recommendations": [
-    {"id":"openai.gpt-5.1.persistence","text":"Emphasize completeness and persistence for long agentic tasks when premature stopping would be costly.","scopes":["long-running-agent","coding","repository-work"],"priority":80,"source_section":"Prompting best practices"},
-    {"id":"openai.gpt-5.1.explicit-output","text":"Specify the desired output detail and format when it matters; use the task's required level of explanation rather than a generic verbosity instruction.","scopes":["common","writing","coding"],"priority":65,"source_section":"Output formatting and verbosity"},
-    {"id":"openai.gpt-5.1.instruction-following","text":"Resolve conflicting instructions explicitly and keep the highest-priority constraints concrete and testable.","scopes":["common","coding","repository-work"],"priority":60,"source_section":"Instruction following"}
+    {"id":"openai.gpt-5.1.persistence","text":"Emphasize completeness and persistence for long agentic tasks when premature stopping would be costly.","scopes":["long-running-agent","coding","repository-work"],"priority":80,"source_section":"Prompting best practices","source_marker":"Persistence"},
+    {"id":"openai.gpt-5.1.explicit-output","text":"Specify the desired output detail and format when it matters; use the task's required level of explanation rather than a generic verbosity instruction.","scopes":["common","writing","coding"],"priority":65,"source_section":"Output formatting and verbosity","source_marker":"Output formatting and verbosity"},
+    {"id":"openai.gpt-5.1.instruction-following","text":"Resolve conflicting instructions explicitly and keep the highest-priority constraints concrete and testable.","scopes":["common","coding","repository-work"],"priority":60,"source_section":"Instruction following","source_marker":"Instruction following"}
   ],
   "runtime_recommendations": [
     {"id":"openai.gpt-5.1.reasoning-effort","text":"GPT-5.1 supports `none`, `low`, `medium`, and `high` reasoning effort; configure this through the provider integration when possible.","classification":"RUNTIME_APPLICABLE","scopes":["common"],"priority":85,"source_section":"Model parameters"},

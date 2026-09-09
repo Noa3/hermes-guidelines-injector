@@ -133,30 +133,40 @@ class UpdateResult:
 
 
 class OpenAIAdapter:
-    """Deterministic extractor for known OpenAI recommendation anchors."""
-    # These are compiler-owned templates.  Remote source text can confirm an
-    # anchor, but can never replace these templates or introduce instructions.
-    MARKERS = {
-        "openai.gpt-6-astra.autonomy": "initiative and follow-through",
-        "openai.gpt-6-astra.skills": "instruction following",
-        "openai.gpt-5.5.outcome-first": "outcome-first prompts",
-        "openai.gpt-5.6.lean-prompts": "Favor leaner prompts",
-        "openai.gpt-5.coding-validation": "check its work",
-    }
+    """Validate anchors declared by the profile data itself.
 
+    Profile rules are the authority for their own ``source_marker`` values.
+    The updater may only confirm or reject those bounded declarations; remote
+    documentation can never add rules, change rule IDs, or change rule text.
+    """
     def update_profile(self, profile: ModelProfile, source_text: str, source_hash: str, reviewed_date: str) -> ModelProfile:
-        lower = source_text.lower()
-        verified = list(profile.metadata.get("verified_rule_anchors", [])) if isinstance(profile.metadata, Mapping) else []
-        for rule_id, marker in self.MARKERS.items():
-            if any(item.id == rule_id for item in profile.prompt_recommendations) and marker.lower() in lower:
-                if rule_id not in verified:
-                    verified.append(rule_id)
+        normalized_source = source_text.casefold()
+        recommendations = profile.prompt_recommendations + profile.runtime_recommendations
+        marked = tuple(item for item in recommendations if item.source_marker)
+        verified = sorted(item.id for item in marked if item.source_marker.casefold() in normalized_source)
+        missing = sorted(item.id for item in marked if item.source_marker.casefold() not in normalized_source)
         metadata = dict(profile.metadata)
-        metadata["verified_rule_anchors"] = sorted(set(verified))
+        # Replace, rather than merge, verification state.  A marker removed
+        # from the current source must not remain verified forever.
+        for key in (
+            "verified_rule_anchors",
+            "missing_rule_anchors",
+            "source_anchor_count",
+            "unverified_rule_count",
+        ):
+            metadata.pop(key, None)
+        metadata.update(
+            {
+                "verified_rule_anchors": verified,
+                "missing_rule_anchors": missing,
+                "source_anchor_count": len(marked),
+                "unverified_rule_count": sum(1 for item in recommendations if not item.source_marker),
+            }
+        )
         raw = profile.to_mapping()
         raw["source_hash"] = source_hash
         raw["source_review_date"] = reviewed_date
-        raw["profile_revision"] = f"{profile.profile_revision}+source"
+        raw["profile_revision"] = profile.profile_revision
         raw["metadata"] = metadata
         return ModelProfile.from_mapping(raw, origin=f"updated:{profile.exact_model_id}")
 
@@ -215,13 +225,12 @@ class SourceUpdater:
                         "sha256": digest,
                         "bytes": len(payload),
                     }
-                    if digest == old_digest:
-                        continue
-                    changed.append(key)
-                    snapshot = self.data_root / "raw" / provider_name / f"{source_name}.txt"
-                    snapshot.parent.mkdir(parents=True, exist_ok=True)
-                    snapshot.write_text(source_to_text(payload, final_url), encoding="utf-8")
                     text = source_to_text(payload, final_url)
+                    if digest != old_digest:
+                        changed.append(key)
+                        snapshot = self.data_root / "raw" / provider_name / f"{source_name}.txt"
+                        snapshot.parent.mkdir(parents=True, exist_ok=True)
+                        snapshot.write_text(text, encoding="utf-8")
                     for profile in list(repository.profiles):
                         if profile.provider != provider_name or display_url not in profile.source_urls:
                             continue

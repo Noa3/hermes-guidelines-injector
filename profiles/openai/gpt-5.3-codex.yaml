@@ -4,16 +4,16 @@
   "exact_model_id": "gpt-5.3-codex",
   "aliases": ["gpt-5.3-codex", "codex"],
   "match_prefixes": ["gpt-5.3-codex-"],
-  "source_urls": ["https://developers.openai.com/api/docs/guides/latest-model"],
+  "source_urls": ["https://developers.openai.com/api/docs/guides/latest-model", "https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide"],
   "source_review_date": "2026-09-09",
   "source_hash": "2a59b26078e001a4e4e3da10693e80ad5ee1c02cbe472afa6b682308f27b8b22",
   "source_type": "official",
   "profile_revision": "1",
   "confidence": "high",
   "prompt_recommendations": [
-    {"id":"openai.gpt-5.3-codex.repo-context","text":"For coding tasks, state the repository goal, relevant constraints, and acceptance checks; then let the coding agent inspect the repository and choose the implementation sequence.","scopes":["coding","repository-work"],"priority":85,"source_section":"Coding agents"},
-    {"id":"openai.gpt-5.3-codex.patch-tool","text":"Prefer structured patch operations for code changes when the host exposes them, and validate the applied result rather than assuming a patch succeeded.","scopes":["coding","repository-work"],"priority":75,"source_section":"Apply patch"},
-    {"id":"openai.gpt-5.3-codex.long-running","text":"For long coding trajectories, preserve the original acceptance criteria through context compaction and resume from verified state.","scopes":["coding","long-running-agent"],"priority":65,"source_section":"Long-running tasks"}
+    {"id":"openai.gpt-5.3-codex.repo-context","text":"For coding tasks, state the repository goal, relevant constraints, and acceptance checks; then let the coding agent inspect the repository and choose the implementation sequence.","scopes":["coding","repository-work"],"priority":85,"source_section":"Coding agents","source_marker":"Code Implementation"},
+    {"id":"openai.gpt-5.3-codex.patch-tool","text":"Prefer structured patch operations for code changes when the host exposes them, and validate the applied result rather than assuming a patch succeeded.","scopes":["coding","repository-work"],"priority":75,"source_section":"Apply patch","source_marker":"Editing constraints"},
+    {"id":"openai.gpt-5.3-codex.long-running","text":"For long coding trajectories, preserve the original acceptance criteria through context compaction and resume from verified state.","scopes":["coding","long-running-agent"],"priority":65,"source_section":"Long-running tasks","source_marker":"Compaction"}
   ],
   "runtime_recommendations": [
     {"id":"openai.gpt-5.3-codex.reasoning-effort","text":"Use the Codex reasoning-effort setting through the provider/API layer when available; this plugin does not mutate it.","classification":"RUNTIME_APPLICABLE","scopes":["coding","common"],"priority":80,"source_section":"API parameters"},

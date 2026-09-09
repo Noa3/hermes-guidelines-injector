@@ -143,6 +143,7 @@ Ein Profile enthält unter anderem:
 - `source_urls`, `source_review_date`, `source_hash`, `source_type`;
 - `prompt_recommendations`;
 - `runtime_recommendations`;
+- optionale `source_marker`-Werte an einzelnen Empfehlungen;
 - Konfidenz und Profilrevision.
 
 Die Priorität ist:
@@ -241,6 +242,22 @@ Die OpenAI-Profile wurden gegen den offiziellen Model-Guidance-Text geprüft. Di
 injizieren absichtlich nichts, solange kein verlässlich belegtes, provider-spezifisches
 Prompting-Profil gepflegt ist. So werden keine Provider-Empfehlungen erfunden.
 
+### Profilgetriebene Source-Marker
+
+`source_marker` ist ein stabiler Abschnittsname oder eine unterscheidungskräftige
+Phrase aus der offiziellen Quelle. Der Marker gehört direkt zur Regel im Profil;
+`OpenAIAdapter` führt keine parallele Python-Tabelle mit Regel-IDs. Marker werden
+ausschließlich während `/model-guidance update` geprüft und niemals in den Prompt
+injiziert. Remote-Dokumentation kann damit nur bereits vorhandene Regeln als
+`verified` oder `missing` markieren. Sie kann keine neuen Regel-IDs, Texte oder
+Prompt-Regeln erzeugen.
+
+Bei jedem erfolgreichen Source-Refresh werden `verified_rule_anchors`,
+`missing_rule_anchors`, `source_anchor_count` und die Zahl markerloser Regeln neu
+berechnet. Alte Verifikationen werden nicht weitergeführt, wenn ein Abschnitt aus
+der aktuellen Quelle verschwunden ist. `status` und `sources` zeigen diese Werte
+diagnostisch an.
+
 ## Update-Prozess
 
 Normalbetrieb ist offline. Der manuelle Befehl:
@@ -255,7 +272,7 @@ macht ausschließlich Folgendes:
 2. ruft nur HTTPS-Quellen von erlaubten offiziellen OpenAI-Hosts ab;
 3. begrenzt Zeit, Redirects und Datenmenge;
 4. speichert Rohtext und SHA-256-Metadaten plugin-eigen;
-5. extrahiert nur compiler-eigene, vorab bekannte Regelanker;
+5. prüft nur `source_marker`-Werte, die bereits in lokalen Profilregeln stehen;
 6. validiert das resultierende Profil vor Aktivierung;
 7. schreibt nur nach `managed-profiles/`;
 8. meldet `ADDED`, `MODIFIED`, `REMOVED` und Fehler.

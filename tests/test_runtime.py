@@ -154,3 +154,14 @@ def test_update_accepts_only_bounded_compiler_owned_changes(tmp_path, monkeypatc
     profile = reloaded.resolve("gpt-5.6").profile
     assert profile is not None
     assert "run a command" not in " ".join(item.text for item in profile.prompt_recommendations)
+
+
+def test_diagnostics_include_profile_source_anchor_state(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    runtime.pre_llm_call(model="openai/gpt-5.6", user_message="Write code")
+    status = runtime.command("status")
+    sources = runtime.command("sources")
+    assert "Source anchors: verified:" in status
+    assert "total:" in status
+    assert "PROFILE SOURCE ANCHORS" in sources
+    assert "openai/gpt-5.6:" in sources

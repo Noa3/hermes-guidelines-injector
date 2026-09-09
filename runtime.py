@@ -334,6 +334,7 @@ class ModelGuidanceRuntime:
             return "MODEL GUIDANCE STATUS\n\nNo model has been supplied to the plugin in this session. Use /model-guidance test <model-id> for an offline lookup."
         injected = len(result.active_prompt)
         runtime_applied = sum(1 for item in result.runtime_recommendations if self._runtime_applied(item.id))
+        anchor_counts = self._source_anchor_counts(result.match.profile)
         lines = [
             "MODEL GUIDANCE STATUS",
             f"Enabled: {self.enabled}",
@@ -344,6 +345,7 @@ class ModelGuidanceRuntime:
             f"Profile: {result.match.profile.provider + '/' + result.match.profile.exact_model_id if result.match.profile else 'none'}",
             f"Match: {result.match.match_kind} ({result.match.confidence})",
             f"Sources reviewed: {', '.join(result.match.profile.source_urls) if result.match.profile else 'none'}",
+            f"Source anchors: verified: {anchor_counts[0]}, missing: {anchor_counts[1]}, total: {anchor_counts[2]}, unverified/no-marker: {anchor_counts[3]}",
             f"Prompt recommendations considered: {injected + len(result.hermes_handled)}",
             f"Already handled by Hermes: {len(result.hermes_handled)}",
             f"Injected: {injected}",
@@ -462,7 +464,33 @@ class ModelGuidanceRuntime:
             lines.append(f"{provider}: {spec.get('priority', 'unknown')}")
             for name, source in (spec.get("sources", {}) or {}).items():
                 lines.append(f"- {name}: {source.get('url', '')} ({source.get('type', 'unknown')})")
+        lines.extend(["", "PROFILE SOURCE ANCHORS"])
+        for profile in sorted(self.repository.profiles, key=lambda item: (item.provider, item.exact_model_id)):
+            verified, missing, total, unverified = self._source_anchor_counts(profile)
+            lines.append(
+                f"- {profile.provider}/{profile.exact_model_id}: "
+                f"verified={verified}, missing={missing}, total={total}, unverified/no-marker={unverified}"
+            )
         return "\n".join(lines)
+
+    @staticmethod
+    def _source_anchor_counts(profile: Any) -> tuple[int, int, int, int]:
+        if profile is None:
+            return 0, 0, 0, 0
+        recommendations = tuple(profile.prompt_recommendations) + tuple(profile.runtime_recommendations)
+        marked_ids = {item.id for item in recommendations if item.source_marker}
+        metadata = profile.metadata if isinstance(profile.metadata, Mapping) else {}
+        verified = {
+            str(value)
+            for value in metadata.get("verified_rule_anchors", [])
+            if str(value) in marked_ids
+        }
+        missing = {
+            str(value)
+            for value in metadata.get("missing_rule_anchors", [])
+            if str(value) in marked_ids
+        }
+        return len(verified), len(missing), len(marked_ids), len(recommendations) - len(marked_ids)
 
     def _runtime_applied(self, rule_id: str) -> bool:
         if not self.last_result:

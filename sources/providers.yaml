@@ -11,6 +11,10 @@
         "models": {
           "url": "https://developers.openai.com/api/docs/models",
           "type": "official"
+        },
+        "codex_prompting": {
+          "url": "https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide",
+          "type": "official"
         }
       }
     }

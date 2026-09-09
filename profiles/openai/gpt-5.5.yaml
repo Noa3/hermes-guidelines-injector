@@ -11,9 +11,9 @@
   "profile_revision": "1",
   "confidence": "high",
   "prompt_recommendations": [
-    {"id":"openai.gpt-5.5.outcome-oriented","text":"Describe the outcome, constraints, and success criteria instead of forcing a detailed step-by-step procedure; let the model choose an efficient approach.","scopes":["common","coding","research","writing"],"priority":90,"source_section":"Prompting"},
-    {"id":"openai.gpt-5.5.explicit-constraints","text":"Make important format, tool, and scope constraints explicit because this generation follows literal instructions closely.","scopes":["common","coding","writing"],"priority":75,"source_section":"Instruction following"},
-    {"id":"openai.gpt-5.5.coding-context","text":"For repository work, provide the relevant project context and acceptance criteria, then allow the model to use the available tools to inspect the codebase.","scopes":["coding","repository-work"],"priority":65,"source_section":"Coding"}
+    {"id":"openai.gpt-5.5.outcome-oriented","text":"Describe the outcome, constraints, and success criteria instead of forcing a detailed step-by-step procedure; let the model choose an efficient approach.","scopes":["common","coding","research","writing"],"priority":90,"source_section":"Prompting","source_marker":"outcome-first prompts"},
+    {"id":"openai.gpt-5.5.explicit-constraints","text":"Make important format, tool, and scope constraints explicit because this generation follows literal instructions closely.","scopes":["common","coding","writing"],"priority":75,"source_section":"Instruction following","source_marker":"Define success criteria and stopping rules"},
+    {"id":"openai.gpt-5.5.coding-context","text":"For repository work, provide the relevant project context and acceptance criteria, then allow the model to use the available tools to inspect the codebase.","scopes":["coding","repository-work"],"priority":65,"source_section":"Coding","source_marker":"Coding workflows need stronger orchestration"}
   ],
   "runtime_recommendations": [
     {"id":"openai.gpt-5.5.reasoning-effort","text":"Use the provider reasoning-effort setting when available; the plugin reports this recommendation but does not rewrite request parameters.","classification":"RUNTIME_APPLICABLE","scopes":["common"],"priority":80,"source_section":"API parameters"},
