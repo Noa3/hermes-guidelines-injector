@@ -16,5 +16,5 @@ def register(ctx):
         "model-guidance",
         runtime.command,
         description="Inspect and update official model guidance",
-        args_hint="[status|show|test MODEL|models|sources|reload|update]",
+        args_hint="[status|show|stats|test MODEL|models|sources|reload|update]",
     )

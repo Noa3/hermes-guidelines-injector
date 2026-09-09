@@ -127,7 +127,7 @@ def main() -> int:
     for home in homes:
         destination, enabled = install(home, source)
         print(f"installed: {destination}")
-        print(f"enabled: {enabled} ({home / 'config.yaml'})")
+        print(f"config_changed: {enabled} ({home / 'config.yaml'})")
     return 0
 
 

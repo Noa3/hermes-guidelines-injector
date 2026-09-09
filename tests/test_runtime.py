@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import model_guidance_sources
@@ -45,6 +46,46 @@ def test_runtime_model_switch_uses_hook_model_each_turn(tmp_path):
     assert "gpt-5.6" in first["context"]
     assert second is None  # family fallback has no prompt injection
     assert runtime.last_result.match.profile.exact_model_id == "gemini-family"
+
+
+def test_normal_runtime_is_network_free_and_uses_deterministic_cache(tmp_path, monkeypatch):
+    def unexpected_network(*args, **kwargs):
+        raise AssertionError("normal model guidance runtime attempted network access")
+
+    monkeypatch.setattr(model_guidance_sources, "urlopen", unexpected_network)
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    first = runtime.pre_llm_call(model="openai/gpt-5.6", user_message="Implement code")
+    second = runtime.pre_llm_call(model="openai/gpt-5.6", user_message="Implement code")
+    assert first and second
+    assert runtime.cache_misses == 1
+    assert runtime.cache_hits == 1
+    stats = runtime.command("stats")
+    assert "Additional LLM calls: 0" in stats
+    assert "Normal-runtime network requests: 0" in stats
+    assert "Compiler cache: hits=1, misses=1" in stats
+
+
+def test_profile_file_change_invalidates_runtime_cache(tmp_path):
+    runtime = ModelGuidanceRuntime(FakeContext(), plugin_root=ROOT, data_root=tmp_path / "data")
+    first = runtime.pre_llm_call(model="openai/gpt-5.6", user_message="Implement code")
+    assert first and runtime.cache_misses == 1
+    override_dir = tmp_path / "data" / "user-overrides" / "openai"
+    override_dir.mkdir(parents=True)
+    override = {
+        "provider": "openai",
+        "model_family": "gpt-5.6",
+        "exact_model_id": "gpt-5.6",
+        "prompt_recommendations": [{
+            "id": "user.cache-invalidation",
+            "text": "Apply the local cache invalidation regression rule.",
+            "scopes": ["common"],
+            "priority": 100,
+        }],
+    }
+    (override_dir / "gpt-5.6.yaml").write_text(json.dumps(override), encoding="utf-8")
+    second = runtime.pre_llm_call(model="openai/gpt-5.6", user_message="Implement code")
+    assert second and "cache invalidation regression rule" in second["context"]
+    assert runtime.cache_misses == 2
 
 
 def test_disabled_runtime_fails_open(tmp_path):

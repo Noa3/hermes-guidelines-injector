@@ -17,8 +17,9 @@ aktuelle Hermes-Modell-ID
   -> pre_llm_call-Kontext
 ```
 
-Normale LLM-Turns benötigen **keinen Netzwerkzugriff**. Internet wird ausschließlich
-bei dem expliziten Befehl `/model-guidance update` verwendet.
+Normale LLM-Turns benötigen **keinen Netzwerkzugriff und keinen zusätzlichen
+LLM-Aufruf**. Internet wird ausschließlich bei dem expliziten Befehl
+`/model-guidance update` verwendet.
 
 ## Was enthalten ist
 
@@ -34,6 +35,9 @@ bei dem expliziten Befehl `/model-guidance update` verwendet.
 - Trennung von Prompt-Regeln und API-/Runtime-Empfehlungen;
 - Hermes-Overlap-Registry mit Quellenhinweis auf die aktuelle Hermes-Implementierung;
 - getrennte Managed-Profile und lokale User-Overrides;
+- deterministischer Resolver-/Compiler-Cache mit Datei-, Config- und Versions-
+  Invalidierung;
+- konfigurierbare Rule-, Family- und Task-Limits sowie eine lokale Token-Schätzung;
 - deterministische Offline-Tests und simuliertes Model Switching;
 - fail-open Verhalten: ein kaputtes Profil darf Hermes nicht stoppen.
 
@@ -119,6 +123,13 @@ Die Modell-ID aus jedem `pre_llm_call` ist autoritativ. Es gibt keinen Prozess-g
 "aktuellen Modell"-Cache, der einen `/model`-Wechsel überleben und falsche Guidance
 injizieren könnte.
 
+Der Hook ruft weder ein Modell noch einen Provider auf. Normalbetrieb besteht nur aus
+lokalem Registry-Lookup, deterministischer Regelkompilierung und dem vorhandenen
+Hermes-LLM-Request. Unveränderte Modell-/Task-/Config-Kombinationen werden aus einem
+begrenzten In-Memory-Compiler-Cache bedient. Resolver-Ergebnisse werden ebenfalls
+gecached; Änderungen an Profilen, Overlap-Datei, Plugin-Konfiguration oder Compiler-
+Version invalidieren den Cache.
+
 ## Profile und Matching
 
 Profile liegen als JSON-kompatibles YAML unter `profiles/<provider>/`. JSON ist absichtlich
@@ -192,7 +203,10 @@ Mögliche Scopes sind `common`, `coding`, `repository-work`, `research`, `comput
 `writing`, `long-running-agent`, `subagent`, `tool-heavy` und `kanban`.
 
 Das Standardlimit beträgt 3600 Zeichen. Nicht injizierte API-/Runtime-Regeln zählen nicht
-zum Prompttext. Ein Profil kann über `max_chars` in den Plugin-Settings begrenzt werden.
+zum Prompttext. Über die Plugin-Settings sind zusätzlich `max_rules`,
+`max_family_rules` und `max_task_rules` begrenzbar. Regeln werden deterministisch nach
+Priorität ausgewählt; bei Überlauf fallen niedrig priorisierte Regeln weg. Die
+Tokenzahl wird ohne Provider-Tokenizer grob als `ceil(characters / 4)` geschätzt.
 
 ## User-Overrides
 
@@ -255,6 +269,7 @@ Compiler interpretiert. Bei Fehlern bleiben bestehende lokale Profile aktiv.
 ```text
 /model-guidance status
 /model-guidance show
+/model-guidance stats
 /model-guidance test openai/gpt-5.6
 /model-guidance test openrouter/openai/gpt-5.4
 /model-guidance models
@@ -275,7 +290,9 @@ Normalisierung, Provider-/Familienauflösung, Profilwahl, Filterung und Kompilie
 
 `status` zeigt unter anderem aktives Modell, normalisierte ID, Provider, Familie, Profil,
 Quellen, injizierte und Hermes-unterdrückte Regeln, Runtime-/Unsupported-Hinweise und
-die Zeichenzahl. `show` trennt:
+die Zeichenzahl, geschätzte Prompt-Tokens und den letzten Cache-Status. `stats` zeigt
+zusätzlich explizit, dass im Normalbetrieb null zusätzliche LLM- und Netzwerkaufrufe
+stattfinden, sowie Resolver-/Compiler-Cache-Hits und -Misses. `show` trennt:
 
 - `ACTIVE PROMPT GUIDANCE`;
 - `HERMES-HANDLED GUIDANCE`;
@@ -321,7 +338,9 @@ python -m pytest -q
 Die Suite testet unter anderem Registry-Loading, fehlerhafte Profile, Aliase,
 OpenRouter-IDs, Provider-/Familien-Matching, Inheritance-/Override-Pfade,
 Hermes-Overlap, Task-Filter, Size-Limits, User-Overrides, Model Switching,
-unknown models, Runtime-Hooks, Commands, Offline-Updates und SSRF-/HTML-Grenzen.
+unknown models, Runtime-Hooks, Commands, Offline-Updates, SSRF-/HTML-Grenzen,
+deterministische Rule-Limits, Cache-Hits und einen Netzwerk-Wächter für den
+Normalpfad.
 
 Es gibt bewusst keine Tests gegen echte GPT-, Claude-, Gemini-, Qwen-, DeepSeek-, Kimi-,
 GLM-, Llama-, Mistral- oder Grok-Endpunkte. Die IDs werden simuliert; die Qualität des
@@ -331,6 +350,8 @@ zugrunde liegenden Modells ist nicht Bestandteil dieses Plugins.
 
 - Hermes `pre_api_request` ist aktuell nur Beobachtung; Runtime-Parameter werden nicht
   verändert.
+- Der Compiler-Cache ist pro Plugin-Prozess flüchtig. Nach einem Hermes-Neustart werden
+  lokale Profile erneut gelesen; es findet dabei weiterhin kein Netzwerkzugriff statt.
 - `/model-guidance update` ist zunächst eine sichere, deterministische Change-/Metadata-
   Aktualisierung. Freiform-LLM-Extraktion aus Providerseiten ist bewusst nicht aktiviert.
 - Nicht-OpenAI-Profile sind derzeit sichere Nullprofile ohne zusätzliche Prompt-Injektion.
@@ -344,5 +365,7 @@ zugrunde liegenden Modells ist nicht Bestandteil dieses Plugins.
 Arbeite zuerst in `model_guidance_core.py` und schreibe reine Resolver-/Compiler-Tests.
 Ändere Hermes Core nicht für provider-spezifische Logik. Halte `pre_llm_call` schnell und
 offline, behandle Dokumentation als untrusted data, bewahre User-Overrides und prüfe
-immer den echten Hermes-Hookvertrag. Ein neues Profil darf keine alten Workarounds erben,
-solange diese Vererbung nicht ausdrücklich belegt und getestet ist.
+immer den echten Hermes-Hookvertrag. Der normale Hook darf keine Netzwerk-, Subagent-
+oder Modellaufrufe hinzufügen. Ein neues Profil darf keine alten Workarounds erben,
+solange diese Vererbung nicht ausdrücklich belegt und getestet ist. Nach Änderungen
+`python -m pytest -q` und `python -m compileall -q .` ausführen.

@@ -290,6 +290,11 @@ class ProfileRepository:
         self.user_override_root = Path(user_override_root) if user_override_root else None
         self.errors: list[str] = []
         self.profiles: list[ModelProfile] = []
+        self.generation = 0
+        self.resolve_cache_hits = 0
+        self.resolve_cache_misses = 0
+        self._resolve_cache: dict[tuple[str, str], MatchResult] = {}
+        self._file_signature: tuple[tuple[str, int, int], ...] = ()
         self.reload()
 
     def reload(self) -> None:
@@ -321,12 +326,43 @@ class ProfileRepository:
                     self.errors.append(f"ignored corrupt user override {path.name}: {exc}")
                     LOGGER.warning("%s", self.errors[-1])
         self.profiles = list(bundled.values())
+        self.generation += 1
+        self._resolve_cache.clear()
+        self._file_signature = self._calculate_file_signature()
+
+    def _profile_roots(self) -> tuple[Path, ...]:
+        return tuple(root for root in (self.root, self.overlay_root, self.user_override_root) if root)
+
+    def _calculate_file_signature(self) -> tuple[tuple[str, int, int], ...]:
+        entries: list[tuple[str, int, int]] = []
+        for root in self._profile_roots():
+            for path in sorted(root.glob("*/*.yaml")):
+                try:
+                    stat = path.stat()
+                except OSError:
+                    continue
+                entries.append((str(path), stat.st_mtime_ns, stat.st_size))
+        return tuple(entries)
+
+    def refresh_if_changed(self) -> bool:
+        """Reload local profiles only after a file signature change."""
+        signature = self._calculate_file_signature()
+        if signature == self._file_signature:
+            return False
+        self.reload()
+        return True
 
     def get(self, provider: str, exact_model_id: str) -> ModelProfile | None:
         return next((p for p in self.profiles if p.provider == provider and p.exact_model_id == exact_model_id), None)
 
     def resolve(self, raw_model_id: str, provider_hint: str = "") -> MatchResult:
         raw = str(raw_model_id or "")
+        cache_key = (raw, str(provider_hint or "").strip().lower())
+        cached = self._resolve_cache.get(cache_key)
+        if cached is not None:
+            self.resolve_cache_hits += 1
+            return cached
+        self.resolve_cache_misses += 1
         normalized = normalize_id(raw)
         provider_hint = _PROVIDER_ALIASES.get(str(provider_hint or "").strip().lower(), str(provider_hint or "").strip().lower())
         scored: list[tuple[int, ModelProfile, str, str]] = []
@@ -344,10 +380,14 @@ class ProfileRepository:
                     scored.append((7000 + len(prefix), profile, "pattern", f"explicit prefix {prefix}"))
         if scored:
             _, profile, kind, reason = max(scored, key=lambda item: item[0])
-            return MatchResult(raw, normalized, profile.provider, profile.model_family, profile, kind, "high", reason)
+            result = MatchResult(raw, normalized, profile.provider, profile.model_family, profile, kind, "high", reason)
+            self._resolve_cache[cache_key] = result
+            return result
         detected = provider_hint or provider_from_model(raw)
         family = infer_family(normalized, detected)
-        return MatchResult(raw, normalized, detected, family, None, "fallback", "low" if detected != "unknown" else "unknown", "no safe local profile matched")
+        result = MatchResult(raw, normalized, detected, family, None, "fallback", "low" if detected != "unknown" else "unknown", "no safe local profile matched")
+        self._resolve_cache[cache_key] = result
+        return result
 
 
 def infer_family(normalized: str, provider: str) -> str:
@@ -457,6 +497,9 @@ def compile_guidance(
     conversation_history: Sequence[Any] | None = None,
     platform: str = "",
     max_chars: int = 3600,
+    max_rules: int = 32,
+    max_family_rules: int = 16,
+    max_task_rules: int = 8,
     hermes_overlap: HermesOverlap | None = None,
     runtime_observation: Mapping[str, Any] | None = None,
 ) -> CompilationResult:
@@ -498,22 +541,44 @@ def compile_guidance(
         if item.plugin_injection:
             active.append(item)
     active.sort(key=lambda item: (-item.priority, item.id))
+    limit = max(64, int(max_chars))
     header = (
         "<model_guidance>\n"
-        f"Model-specific guidance for {match.normalized_model_id} ({match.provider}/{match.model_family}).\n"
-        "Apply only the relevant recommendations below; Hermes already supplies its own execution, tool-use, and verification rules.\n"
+        f"Model {match.normalized_model_id} ({match.provider}/{match.model_family}); apply only relevant rules.\n"
     )
+    closing = "</model_guidance>"
+    if len(header) + len(closing) > limit:
+        header = "<model_guidance>\n"
     lines = [header]
-    chars = len(header) + len("</model_guidance>")
+    chars = len(header)
+    selected: list[Recommendation] = []
+    selected_family = 0
+    selected_task = 0
     truncated = False
     for item in active:
+        is_family_rule = "common" not in item.scopes
+        is_task_rule = any(scope in tasks and scope != "common" for scope in item.scopes)
+        if len(selected) >= max(0, int(max_rules)):
+            truncated = True
+            continue
+        if is_family_rule and selected_family >= max(0, int(max_family_rules)):
+            truncated = True
+            continue
+        if is_task_rule and selected_task >= max(0, int(max_task_rules)):
+            truncated = True
+            continue
         line = f"- {item.text}\n"
-        if chars + len(line) + len("</model_guidance>") > max(400, int(max_chars)):
+        if chars + len(line) + len(closing) > limit:
             truncated = True
             continue
         lines.append(line)
         chars += len(line)
-    lines.append("</model_guidance>")
+        selected.append(item)
+        if is_family_rule:
+            selected_family += 1
+        if is_task_rule:
+            selected_task += 1
+    lines.append(closing)
     text = "".join(lines)
     observation = runtime_observation or {}
     if observation:
@@ -522,11 +587,11 @@ def compile_guidance(
         )
     inherited = tuple(match.profile.inherits)
     return CompilationResult(
-        match, tasks, text if active else "", tuple(active), tuple(handled), tuple(runtime), tuple(unsupported), tuple(informational), inherited, len(text if active else ""), truncated, tuple(errors)
+        match, tasks, text if selected else "", tuple(selected), tuple(handled), tuple(runtime), tuple(unsupported), tuple(informational), inherited, len(text if selected else ""), truncated, tuple(errors)
     )
 
 
-def _runtime_observed(item: Recommendation, observation: Mapping[str, Any]) -> bool:
+def runtime_rule_observed(item: Recommendation, observation: Mapping[str, Any]) -> bool:
     key = item.id.lower()
     request = observation.get("request", {})
     if not isinstance(request, Mapping):
@@ -538,6 +603,11 @@ def _runtime_observed(item: Recommendation, observation: Mapping[str, Any]) -> b
     if "responses" in key or "api" in key:
         return str(observation.get("api_mode", "")).lower() in {"responses", "codex_responses", "responses_api"}
     return False
+
+
+def estimate_tokens(text: str) -> int:
+    """Cheap deterministic estimate; no provider tokenizer or network is needed."""
+    return 0 if not text else max(1, (len(text) + 3) // 4)
 
 
 def load_data(path: Path) -> dict[str, Any]:

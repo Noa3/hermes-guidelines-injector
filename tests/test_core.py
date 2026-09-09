@@ -10,6 +10,7 @@ from model_guidance_core import (
     ProfileRepository,
     compile_guidance,
     detect_tasks,
+    estimate_tokens,
     normalize_id,
     provider_from_model,
 )
@@ -114,6 +115,21 @@ def test_size_limit_keeps_output_bounded(repository):
     )
     assert result.characters <= 400
     assert result.truncated is True
+
+
+def test_rule_limits_and_token_estimate_are_deterministic(repository):
+    result = compile_guidance(
+        repository,
+        repository.resolve("openai/gpt-5.6"),
+        user_message="Implement and test a repository change",
+        max_chars=3600,
+        max_rules=1,
+        max_family_rules=1,
+        max_task_rules=1,
+    )
+    assert len(result.active_prompt) <= 1
+    assert result.characters == len(result.injected_text)
+    assert estimate_tokens(result.injected_text) == (len(result.injected_text) + 3) // 4
 
 
 def test_malformed_profile_is_rejected(tmp_path):

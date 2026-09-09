@@ -14,5 +14,8 @@ provides_hooks:
 config_schema:
   enabled: {type: bool, default: true, description: Enable model-specific guidance injection}
   max_chars: {type: int, default: 3600, description: Maximum injected guidance characters}
+  max_rules: {type: int, default: 32, description: Maximum prompt rules selected per turn}
+  max_family_rules: {type: int, default: 16, description: Maximum non-common family rules per turn}
+  max_task_rules: {type: int, default: 8, description: Maximum task-scoped rules per turn}
   source_timeout_seconds: {type: float, default: 8.0, description: Timeout used only by the manual update command}
   source_max_bytes: {type: int, default: 2000000, description: Maximum bytes accepted per official source}

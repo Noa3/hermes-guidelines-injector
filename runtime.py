@@ -15,8 +15,10 @@ try:  # Hermes loads this directory as a namespaced package.
         HermesOverlap,
         ProfileRepository,
         compile_guidance,
+        detect_tasks,
+        estimate_tokens,
         load_data,
-        provider_from_model,
+        runtime_rule_observed,
     )
     from .model_guidance_sources import SourceUpdater
 except ImportError:  # local unit tests may import modules from the repository root.
@@ -26,8 +28,10 @@ except ImportError:  # local unit tests may import modules from the repository r
         HermesOverlap,
         ProfileRepository,
         compile_guidance,
+        detect_tasks,
+        estimate_tokens,
         load_data,
-        provider_from_model,
+        runtime_rule_observed,
     )
     from model_guidance_sources import SourceUpdater  # type: ignore
 
@@ -40,7 +44,10 @@ class ModelGuidanceRuntime:
         self.plugin_root = Path(plugin_root or Path(__file__).resolve().parent)
         self.data_root = Path(data_root or self._default_data_root())
         self.enabled = self._as_bool(self._config("enabled", True), True)
-        self.max_chars = self._bounded_int(self._config("max_chars", 3600), 400, 12000, 3600)
+        self.max_chars = self._bounded_int(self._config("max_chars", 3600), 200, 12000, 3600)
+        self.max_rules = self._bounded_int(self._config("max_rules", 32), 0, 128, 32)
+        self.max_family_rules = self._bounded_int(self._config("max_family_rules", 16), 0, 64, 16)
+        self.max_task_rules = self._bounded_int(self._config("max_task_rules", 8), 0, 32, 8)
         self.timeout = self._bounded_float(self._config("source_timeout_seconds", 8.0), 1.0, 30.0, 8.0)
         self.max_bytes = self._bounded_int(self._config("source_max_bytes", 2_000_000), 10000, 2_000_000, 2_000_000)
         self.repository = ProfileRepository(
@@ -53,6 +60,13 @@ class ModelGuidanceRuntime:
         self.last_model_id = ""
         self.last_runtime_observation: dict[str, Any] = {}
         self.last_error = ""
+        self._compile_cache: dict[tuple[Any, ...], CompilationResult] = {}
+        self._compile_cache_limit = 128
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.last_cache_hit = False
+        self._overlap_signature = self._stat_signature(self.plugin_root / "sources" / "hermes-overlap.yaml")
+        self._config_signature = self._runtime_config_signature()
 
     def _default_data_root(self) -> Path:
         try:
@@ -110,6 +124,106 @@ class ModelGuidanceRuntime:
             self.last_error = f"overlap registry unavailable: {exc}"
             return HermesOverlap()
 
+    @staticmethod
+    def _stat_signature(path: Path) -> tuple[int, int] | None:
+        try:
+            stat = path.stat()
+            return stat.st_mtime_ns, stat.st_size
+        except OSError:
+            return None
+
+    def _runtime_config_signature(self) -> tuple[Any, ...]:
+        return (
+            self._as_bool(self._config("enabled", True), True),
+            self._bounded_int(self._config("max_chars", 3600), 200, 12000, 3600),
+            self._bounded_int(self._config("max_rules", 32), 0, 128, 32),
+            self._bounded_int(self._config("max_family_rules", 16), 0, 64, 16),
+            self._bounded_int(self._config("max_task_rules", 8), 0, 32, 8),
+        )
+
+    def _clear_cache(self) -> None:
+        self._compile_cache.clear()
+        self.last_cache_hit = False
+        self.last_result = None
+
+    def _refresh_local_state(self) -> None:
+        if self.repository.refresh_if_changed():
+            self._clear_cache()
+        overlap_path = self.plugin_root / "sources" / "hermes-overlap.yaml"
+        overlap_signature = self._stat_signature(overlap_path)
+        if overlap_signature != self._overlap_signature:
+            self.overlap = self._load_overlap()
+            self._overlap_signature = overlap_signature
+            self._clear_cache()
+        config_signature = self._runtime_config_signature()
+        if config_signature != self._config_signature:
+            self.enabled, self.max_chars, self.max_rules, self.max_family_rules, self.max_task_rules = config_signature
+            self._config_signature = config_signature
+            self._clear_cache()
+
+    @staticmethod
+    def _observation_signature(observation: Mapping[str, Any]) -> tuple[Any, ...]:
+        request = observation.get("request", {})
+        if not isinstance(request, Mapping):
+            request = {}
+        return (
+            str(observation.get("api_mode", "")),
+            bool(request.get("reasoning") or request.get("reasoning_effort")),
+            request.get("parallel_tool_calls"),
+            bool(request.get("prompt_cache_key")),
+        )
+
+    def _compile_cached(
+        self,
+        model: str,
+        *,
+        provider: str = "",
+        user_message: str = "",
+        conversation_history: Any = None,
+        platform: str = "",
+    ) -> CompilationResult:
+        self._refresh_local_state()
+        history = conversation_history or []
+        tasks = detect_tasks(user_message, history, platform)
+        key = (
+            model,
+            provider,
+            tasks,
+            self._observation_signature(self.last_runtime_observation),
+            COMPILER_VERSION,
+            self.repository.generation,
+            self._overlap_signature,
+            self.max_chars,
+            self.max_rules,
+            self.max_family_rules,
+            self.max_task_rules,
+        )
+        cached = self._compile_cache.get(key)
+        if cached is not None:
+            self.cache_hits += 1
+            self.last_cache_hit = True
+            return cached
+        self.cache_misses += 1
+        self.last_cache_hit = False
+        match = self.repository.resolve(model, provider)
+        result = compile_guidance(
+            self.repository,
+            match,
+            user_message=user_message,
+            conversation_history=history,
+            platform=platform,
+            max_chars=self.max_chars,
+            max_rules=self.max_rules,
+            max_family_rules=self.max_family_rules,
+            max_task_rules=self.max_task_rules,
+            hermes_overlap=self.overlap,
+            runtime_observation=self.last_runtime_observation,
+        )
+        if len(self._compile_cache) >= self._compile_cache_limit:
+            self._compile_cache.pop(next(iter(self._compile_cache)))
+        self._compile_cache[key] = result
+        return result
+
     def on_session_start(self, **kwargs: Any) -> None:
         # This is diagnostic-only.  pre_llm_call always uses its own model kwarg
         # as authoritative, so a model switch cannot use stale state.
@@ -118,6 +232,11 @@ class ModelGuidanceRuntime:
             self.last_model_id = model
 
     def pre_llm_call(self, **kwargs: Any) -> dict[str, str] | None:
+        try:
+            self._refresh_local_state()
+        except Exception as exc:
+            self.last_error = f"local cache refresh failed; using current state: {exc}"
+            LOGGER.warning("model-guidance cache refresh failed", exc_info=True)
         if not self.enabled:
             return None
         model = kwargs.get("model")
@@ -126,16 +245,12 @@ class ModelGuidanceRuntime:
             return None
         try:
             self.last_model_id = model
-            match = self.repository.resolve(model, str(kwargs.get("provider", "")))
-            result = compile_guidance(
-                self.repository,
-                match,
+            result = self._compile_cached(
+                model,
+                provider=str(kwargs.get("provider", "")),
                 user_message=str(kwargs.get("user_message", "")),
                 conversation_history=kwargs.get("conversation_history") or [],
                 platform=str(kwargs.get("platform", "")),
-                max_chars=self.max_chars,
-                hermes_overlap=self.overlap,
-                runtime_observation=self.last_runtime_observation,
             )
             self.last_result = result
             self.last_error = "; ".join(result.errors)
@@ -176,6 +291,8 @@ class ModelGuidanceRuntime:
                 return self._status()
             if action == "show":
                 return self._show()
+            if action == "stats":
+                return self._stats()
             if action == "models":
                 return self._models()
             if action == "sources":
@@ -183,6 +300,8 @@ class ModelGuidanceRuntime:
             if action == "reload":
                 self.repository.reload()
                 self.overlap = self._load_overlap()
+                self._overlap_signature = self._stat_signature(self.plugin_root / "sources" / "hermes-overlap.yaml")
+                self._clear_cache()
                 return f"Reloaded {len(self.repository.profiles)} local model profiles."
             if action == "test":
                 return self._test(args[1] if len(args) > 1 else "")
@@ -191,6 +310,7 @@ class ModelGuidanceRuntime:
                 updater = SourceUpdater(self.plugin_root, self.data_root, timeout=self.timeout, max_bytes=self.max_bytes)
                 result = updater.update(self.repository, offline=offline)
                 self.repository.reload()
+                self._clear_cache()
                 return result.render()
             return f"Unknown /model-guidance action: {action}\n\n{self._help()}"
         except Exception as exc:
@@ -199,16 +319,11 @@ class ModelGuidanceRuntime:
             return f"model-guidance failed safely: {exc}"
 
     def _current_or_unknown(self) -> CompilationResult | None:
+        self._refresh_local_state()
         if self.last_result and self.last_result.match.raw_model_id == self.last_model_id:
             return self.last_result
         if self.last_model_id:
-            result = compile_guidance(
-                self.repository,
-                self.repository.resolve(self.last_model_id),
-                max_chars=self.max_chars,
-                hermes_overlap=self.overlap,
-                runtime_observation=self.last_runtime_observation,
-            )
+            result = self._compile_cached(self.last_model_id)
             self.last_result = result
             return result
         return self.last_result
@@ -229,7 +344,7 @@ class ModelGuidanceRuntime:
             f"Profile: {result.match.profile.provider + '/' + result.match.profile.exact_model_id if result.match.profile else 'none'}",
             f"Match: {result.match.match_kind} ({result.match.confidence})",
             f"Sources reviewed: {', '.join(result.match.profile.source_urls) if result.match.profile else 'none'}",
-            f"Prompt recommendations: {injected + len(result.hermes_handled)}",
+            f"Prompt recommendations considered: {injected + len(result.hermes_handled)}",
             f"Already handled by Hermes: {len(result.hermes_handled)}",
             f"Injected: {injected}",
             f"Runtime recommendations: {len(result.runtime_recommendations)}",
@@ -237,10 +352,37 @@ class ModelGuidanceRuntime:
             f"Informational: {len(result.informational_recommendations)}",
             f"Unsupported by current Hermes: {len(result.unsupported_recommendations)}",
             f"Injected characters: {result.characters}",
+            f"Estimated injected tokens: {estimate_tokens(result.injected_text)}",
+            f"Cache: {'hit' if self.last_cache_hit else 'miss'} (hits={self.cache_hits}, misses={self.cache_misses})",
             f"Task scopes: {', '.join(result.tasks)}",
         ]
         if self.last_error:
             lines.append(f"Diagnostics: {self.last_error}")
+        return "\n".join(lines)
+
+    def _stats(self) -> str:
+        result = self._current_or_unknown()
+        lines = [
+            "MODEL GUIDANCE RUNTIME STATS",
+            "Additional LLM calls: 0",
+            "Normal-runtime network requests: 0",
+            "Documentation lookup during normal turns: 0",
+            f"Resolver cache: hits={self.repository.resolve_cache_hits}, misses={self.repository.resolve_cache_misses}",
+            f"Compiler cache: hits={self.cache_hits}, misses={self.cache_misses}, entries={len(self._compile_cache)}/{self._compile_cache_limit}",
+            f"Compiler version: {COMPILER_VERSION}",
+        ]
+        if result is None:
+            lines.append("Model: none supplied")
+        else:
+            lines.extend([
+                f"Model: {result.match.raw_model_id}",
+                f"Profile: {result.match.profile.provider + '/' + result.match.profile.exact_model_id if result.match.profile else 'none'}",
+                f"Task scopes: {', '.join(result.tasks)}",
+                f"Injected rules: {len(result.active_prompt)}",
+                f"Injected characters: {result.characters}",
+                f"Estimated injected tokens: {estimate_tokens(result.injected_text)}",
+                f"Truncated by limits: {result.truncated}",
+            ])
         return "\n".join(lines)
 
     def _show(self) -> str:
@@ -275,13 +417,10 @@ class ModelGuidanceRuntime:
     def _test(self, model_id: str) -> str:
         if not model_id.strip():
             return "Usage: /model-guidance test <model-id>\nThis performs only local matching and compilation; it never contacts a provider."
-        result = compile_guidance(
-            self.repository,
-            self.repository.resolve(model_id),
+        result = self._compile_cached(
+            model_id,
             user_message="Implement and verify a change in an existing repository.",
             platform="cli",
-            max_chars=self.max_chars,
-            hermes_overlap=self.overlap,
         )
         self.last_result = result
         self.last_model_id = model_id
@@ -325,15 +464,18 @@ class ModelGuidanceRuntime:
                 lines.append(f"- {name}: {source.get('url', '')} ({source.get('type', 'unknown')})")
         return "\n".join(lines)
 
-    @staticmethod
-    def _runtime_applied(rule_id: str) -> bool:
-        return False
+    def _runtime_applied(self, rule_id: str) -> bool:
+        if not self.last_result:
+            return False
+        item = next((item for item in self.last_result.runtime_recommendations if item.id == rule_id), None)
+        return bool(item and runtime_rule_observed(item, self.last_runtime_observation))
 
     @staticmethod
     def _help() -> str:
         return "\n".join([
             "/model-guidance status   Show active profile, filters, sizes, and provenance",
             "/model-guidance show     Show active, Hermes-handled, runtime, unsupported, and source sections",
+            "/model-guidance stats     Show deterministic runtime, cache, and token statistics",
             "/model-guidance test ID  Offline matching/compilation test; never contacts the model",
             "/model-guidance models    List local profiles and aliases",
             "/model-guidance sources   List official source registry",
